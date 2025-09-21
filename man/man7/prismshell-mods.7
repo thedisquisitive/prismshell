@@ -1,0 +1,77 @@
+
+.TH PRISMSHELL-MODS 7 "2025-09-21" "PrismBASIC" "Miscellanea"
+.SH NAME
+prismshell-mods \- PrismBASIC mod system
+.SH OVERVIEW
+Mods are PrismBASIC programs that register new shell commands. They are discovered
+and loaded at shell startup from the mod search paths. Each mod calls:
+.P
+.EX
+CALL Mod.Register("name", entryLine)
+.EE
+where entryLine is the line number at which execution begins when the command
+is invoked.
+.SH SEARCH PATHS
+.TP
+.I ./mods
+Project-local mods directory.
+.TP
+.I ~/.config/prismshell/mods
+User mods directory.
+.TP
+.I /usr/local/share/prismshell/mods
+System mods directory.
+.SH ARGUMENTS
+When a mod command runs, the shell populates:
+.TP
+.B PB_CMD
+Command name.
+.TP
+.B PB_ARGC
+Argument count.
+.TP
+.B PB_ARG1..PB_ARGN
+Individual arguments (quote-aware tokenization: "double", 'single', backslash escapes).
+.TP
+.B PB_ARGS
+Space-joined arguments.
+.TP
+.B PB_ARGV
+Space-joined arguments (MVP).
+.SH META COMMANDS
+Use these in the shell:
+.TP
+.B mods
+List registered mods.
+.TP
+.B mods list
+List registered mods.
+.TP
+.B mods enable \fIname\fR
+Enable a mod.
+.TP
+.B mods disable \fIname\fR
+Disable a mod.
+.TP
+.B mods reload
+Rescan search paths and re-register mods.
+.TP
+.B mods run \fIname\fR [args...]
+Run a mod directly.
+.SH EXAMPLE
+.EX
+10 CALL Mod.Register("say", 100)
+20 END
+100 IF PB_ARGC = 0 THEN 1000
+110 PRINT "» " + PB_ARGS
+120 END
+1000 PRINT "usage: say <text>"
+1010 END
+.EE
+.SH SECURITY
+Treat third-party mods as executable code. For untrusted sources, consider sandboxing
+and reviewing calls used by the mod.
+.SH SEE ALSO
+.BR prismshell (1),
+.BR prismshell-language (7),
+.BR prismshell-prompt (7)

@@ -1,0 +1,55 @@
+
+.TH PRISMSHELL-PROMPT 7 "2025-09-21" "PrismBASIC" "Miscellanea"
+.SH NAME
+prismshell-prompt \- customizing the PrismBASIC shell prompt
+.SH ORDER OF PRECEDENCE
+The shell computes the prompt each time input is read:
+.IP "1." 3
+If a \fIprompt\fR mod is registered and enabled, it is invoked as
+.EX
+prompt --status <code>
+.EE
+and its output (variable PROMPT or last result _) becomes the prompt.
+.IP "2." 3
+If a template is set via
+.EX
+CALL Prompt.SetTemplate("${status_emoji} ${shortcwd} [${time}] pbsh> ")
+.EE
+it is expanded and used.
+.IP "3." 3
+Otherwise a built-in default is used:
+.BR "${status_emoji} ${shortcwd} pbsh> " .
+.SH PLACEHOLDERS
+In templates the following placeholders are recognized:
+.TP
+.B ${cwd}
+Full working directory.
+.TP
+.B ${shortcwd}
+Compacted path (e.g., /h/u/projects/repo).
+.TP
+.B ${status}
+Exit status of last command.
+.TP
+.B ${status_emoji}
+✅ for 0, ❌ for non-zero.
+.TP
+.B ${time}
+Local time HH:MM:SS.
+.SH PROMPT MOD EXAMPLE
+.EX
+10  CALL Mod.Register("prompt", 100)
+20  END
+100 LET CODE = PB_ARG2
+110 CALL Env.Cwd() : LET C = _
+120 IF CODE = "0" THEN 200
+130 LET EMOJI = "❌" : GOTO 210
+200 LET EMOJI = "✅"
+210 LET PROMPT = EMOJI + " " + C + " pbsh> "
+220 LET _ = PROMPT
+230 END
+.EE
+.SH SEE ALSO
+.BR prismshell (1),
+.BR prismshell-mods (7),
+.BR prismshell-language (7)

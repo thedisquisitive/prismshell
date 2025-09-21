@@ -1,0 +1,70 @@
+
+.TH PRISMSHELL-LANGUAGE 7 "2025-09-21" "PrismBASIC" "Miscellanea"
+.SH NAME
+prismshell-language \- PrismBASIC MVP language reference
+.SH SUMMARY
+This page documents the minimal PrismBASIC grammar implemented by the MVP shell.
+.SH STATEMENTS
+.TP
+.B LET name = expr
+Assign the value of expr to a variable.
+.TP
+.B PRINT expr
+Print the value (newline by default). Appending
+.B ;
+omits the newline in MVP.
+.TP
+.B INPUT name
+Read a line into the variable.
+.TP
+.B IF expr THEN line
+Conditional jump to the target line number (jump-form only; no block ENDIF).
+.TP
+.B GOTO line
+Unconditional jump.
+.TP
+.B GOSUB line
+Call a subroutine; use
+.B RETURN
+to resume.
+.TP
+.B CALL QName(args...)
+Invoke a builtin or namespaced routine; see CALLS.
+.TP
+.B END
+Terminate the running program.
+.TP
+.B REM ...
+Comment to end of line.
+.SH EXPRESSIONS
+Numbers, strings, variables, and function calls are supported.
+Binary operators with standard precedence:
+.B * , / , + , - .
+.P
+Comparison operators return 1 or 0:
+.B == , != , < , <= , > , >= .
+.P
+String concatenation uses
+.B + .
+Unary minus is supported.
+.SH SPECIAL VARIABLES
+.TP
+.B _
+Result of the last CALL invocation.
+.TP
+.B PB_ARGV
+Script argv (JSON-ish string in MVP).
+Mods additionally receive: PB_CMD, PB_ARGC, PB_ARG1..PB_ARGN, PB_ARGS.
+.SH CALLS
+Implemented builtins (subset):
+.B Env.Cwd() , Env.Args() , Env.Get() , Env.Set() , Env.Exit() ,
+TTY.ReadLine() , TTY.Write() , TTY.WriteLine() ,
+FS.Read() , FS.Write() , FS.Append() , FS.Delete() , FS.List() ,
+FS.Exists() , FS.Glob() .
+.SH LIMITATIONS
+Block control flow (e.g., IF/ELSE/ENDIF, WHILE/WEND) is not yet implemented.
+User SUB routines and arrays will be added in future releases.
+.SH SEE ALSO
+.BR prismshell (1),
+.BR prismshell-mods (7),
+.BR prismshell-prompt (7)

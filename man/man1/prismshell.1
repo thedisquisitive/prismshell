@@ -1,0 +1,177 @@
+
+.TH PRISMSHELL 1 "2025-09-21" "PrismBASIC" "User Commands"
+.SH NAME
+prismshell \- PrismBASIC interactive shell and interpreter
+.SH SYNOPSIS
+.B prismshell
+.RI "[FILE] [--] [args...]"
+.br
+Run without arguments for an interactive PrismBASIC shell.
+If FILE is given, it is executed as a PrismBASIC program; remaining
+arguments are exposed to the program (see ENVIRONMENT).
+.SH DESCRIPTION
+.B prismshell
+is a minimal retro BASIC shell with a line-numbered editor and a direct mode.
+Lines that do not parse as BASIC are executed by
+.BR /bin/sh (1)
+using
+.B /bin/sh \-lc
+for seamless use of standard Unix tools.
+.P
+The MVP grammar includes expressions, assignments, printing, simple control flow,
+subroutine calls via
+.BR CALL ,
+and a subset of Prism-specific builtins (see CALLS).
+.P
+Shebang scripts are supported; begin files with:
+.P
+.EX
+#!/usr/bin/env prismshell
+.EE
+.SH INTERACTIVE COMMANDS
+The following meta commands are recognized in the REPL (not part of BASIC):
+.TP
+.B LIST
+List the current program (line-numbered).
+.TP
+.B RUN
+Execute the current program.
+.TP
+.B NEW
+Clear the program.
+.TP
+.B SAVE \fIFILE\fR
+Save program to file.
+.TP
+.B LOAD \fIFILE\fR
+Load program from file.
+.TP
+.B BYE
+or
+.BR EXIT :
+Leave the shell.
+.TP
+.B mods
+Mod management (see
+.BR prismshell-mods (7)).
+.SH BASIC OVERVIEW
+Line numbers enable the retro editor. Entering a bare line number deletes it.
+.P
+.EX
+10 PRINT "Hello"
+20 INPUT A
+30 PRINT "You typed " + A
+LIST
+RUN
+.EE
+.P
+Direct mode accepts single lines:
+.P
+.EX
+PRINT 2+2
+CALL Env.Cwd()
+PRINT _
+.EE
+.SH CALLS
+The MVP implements these Prism builtins (all called via
+.BR CALL ):
+.TP
+.B Env.Cwd()
+Return current working directory (string).
+.TP
+.B Env.Args()
+Return argv for script execution. In MVP it is a JSON-ish string stored in
+.BR PB_ARGV .
+.TP
+.B Env.Get("VAR"), Env.Set("VAR","VAL")
+Get/set environment variables.
+.TP
+.B Env.Exit(code)
+Terminate the process with
+.IR code .
+.TP
+.B TTY.ReadLine(prompt), TTY.Write(text), TTY.WriteLine(text)
+Interactive terminal I/O.
+.TP
+.B FS.Read(path), FS.Write(path,text), FS.Append(path,text)
+File operations on text.
+.TP
+.B FS.Delete(path), FS.List(path), FS.Exists(path), FS.Glob(pattern)
+Filesystem helpers; FS.Glob is POSIX-only in MVP.
+.P
+The result of the last
+.B CALL
+is available in the special variable
+.BR _ .
+.SH MODS
+Mods are PrismBASIC files that register shell commands and autoload from search paths.
+See
+.BR prismshell-mods (7)
+for details, meta commands, and examples.
+.SH PROMPT
+The prompt is determined by:
+.IP "1." 4
+A \fIprompt\fR mod, if present/enabled, whose output becomes the prompt.
+.IP "2." 4
+A template set via
+.BR CALL\ Prompt.SetTemplate ( ... ),
+with placeholders such as
+.BR \${status_emoji} ,
+.BR \${shortcwd} ,
+and
+.BR \${time} .
+.IP "3." 4
+A built-in default:
+.BR "\${status_emoji} \${shortcwd} pbsh> " .
+See
+.BR prismshell-prompt (7).
+.SH FILES
+.TP
+.I ./mods
+Project-local mods directory.
+.TP
+.I ~/.config/prismshell/mods
+User mods directory.
+.TP
+.I /usr/local/share/prismshell/mods
+System mods directory.
+.SH ENVIRONMENT
+.TP
+.B PB_ARGV
+Script arguments (MVP: JSON-ish array string). In mods, the shell also populates
+.B PB_CMD
+(the command name),
+.B PB_ARGC
+(count),
+.B PB_ARG1..PB_ARGN
+(individual args), and
+.B PB_ARGS
+(space-joined).
+.TP
+.B HOME
+Used to resolve the user mod directory.
+.SH EXIT STATUS
+The shell returns the exit status of the last command executed in direct mode.
+Program exit is controlled by
+.BR Env.Exit .
+.SH EXAMPLES
+.EX
+# Run a program
+prismshell demo.bas
+
+# Interactive: BASIC and shell mixing
+PRINT "Hello"
+ls -l
+
+# Save & load
+10 PRINT "Hey!"
+SAVE hello.bas
+NEW
+LOAD hello.bas
+RUN
+.EE
+.SH SEE ALSO
+.BR sh (1),
+.BR prismshell-mods (7),
+.BR prismshell-language (7),
+.BR prismshell-prompt (7)
