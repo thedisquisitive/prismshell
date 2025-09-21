@@ -148,26 +148,67 @@ StmtPtr Parser::parseStmt() {
     return s;
   }
 
-  if (t.k == TokKind::Print) {
-    pop();
-    auto e = parseExpr();                 // try to parse an expression
-    if (!e) {                             // no expression? synthesize empty string literal
+  if (t.k==TokKind::Print){
+  pop();
+
+  bool newline = true;
+
+  // allow bare PRINT -> prints a blank line
+  ExprPtr e = parseExpr();
+  if(!e){
+    auto z = std::make_shared<Expr>();
+    z->kind = Expr::Str;
+    z->line = t.line;
+    z->val  = std::string("");
+    e = z;
+  }
+
+  // Accept multiple items separated by ';' or ','
+  // - We concatenate items with '+' internally.
+  // - A trailing ';' (with no following expr) suppresses newline.
+  while(!eof()){
+    if(peek().k == TokKind::Comma || peek().k == TokKind::Semi){
+      bool isSemi = (peek().k == TokKind::Semi);
+      pop();
+
+      // Trailing ';' => no newline; nothing more to print
+      if(peek().k == TokKind::End){
+        if(isSemi) newline = false;
+        break;
+      }
+
+      // Parse next item and fold into a '+' chain
+      auto rhs = parseExpr();
+      if(!rhs){
         auto z = std::make_shared<Expr>();
         z->kind = Expr::Str;
         z->line = t.line;
         z->val  = std::string("");
-        e = z;
-    }
-    bool newline = true;
-    if (peek().k == TokKind::Semi) { pop(); newline = false; }
+        rhs = z;
+      }
 
-    auto s = std::make_shared<Stmt>();
-    s->kind = Stmt::Print;
-    s->line = t.line;
-    s->printExpr = e;
-    s->printNewline = newline;
-    return s;
+      auto b = std::make_shared<Expr>();
+      b->kind  = Expr::Bin;
+      b->op    = '+';
+      b->left  = e;
+      b->right = rhs;
+      e = b;
+
+      // If a semicolon was used between items, also suppress newline (classic vibe).
+      if(isSemi) newline = false;
+      continue;
     }
+    break;
+  }
+
+  auto s = std::make_shared<Stmt>();
+  s->kind         = Stmt::Print;
+  s->line         = t.line;
+  s->printExpr    = e;
+  s->printNewline = newline;
+  return s;
+}
+
 
 
   if (t.k == TokKind::Input) {

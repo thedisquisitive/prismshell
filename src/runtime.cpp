@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <chrono>
 #include <ctime>
+#include <random>
 
 #ifndef _WIN32
   #include <unistd.h>
@@ -22,10 +23,29 @@
   #include <windows.h>
 #endif
 #include <algorithm>
+#include <atomic>
+#include <csignal>
 
 namespace fs = std::filesystem;
 
 namespace pb {
+
+/* ---------------- SIGINT handling for program run ---------------- */
+namespace {
+  inline std::atomic_bool g_rt_sigint{false};
+
+  void rt_on_sigint(int){ g_rt_sigint.store(true, std::memory_order_relaxed); }
+
+  struct RtSigintScope {
+    using Handler = void (*)(int);
+    Handler prev{};
+    RtSigintScope() : prev(std::signal(SIGINT, rt_on_sigint)) {}
+    ~RtSigintScope(){ std::signal(SIGINT, prev); g_rt_sigint.store(false, std::memory_order_relaxed); }
+  };
+
+  inline bool rt_interrupted(){ return g_rt_sigint.load(std::memory_order_relaxed); }
+}
+
 
 /* ---------------- internal helpers ---------------- */
 
@@ -156,6 +176,8 @@ Value Runtime::eval(const ExprPtr& e){
 
 Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
   Result r;
+  if (rt_interrupted()) { return Result{ Error{ s ? s->line : 0, "Interrupted (Ctrl-C)" } }; }
+
   switch(s->kind){
     case Stmt::Rem: break;
 
@@ -219,6 +241,8 @@ Result Runtime::run_line_direct(const std::string& line, int lineNo){
   int pc = lineNo;
   std::vector<int> gs;
   for(const auto& st : out.stmts){
+          if (rt_interrupted()) { r.err = Error{ lineNo, "Interrupted (Ctrl-C)" }; break; }
+    if (rt_interrupted()) { r.err = Error{ lineNo, "Interrupted (Ctrl-C)" }; break; }
     auto rr = exec(st, &pc, gs);
     if(rr.err){ r.err = rr.err; break; }
   }
@@ -231,6 +255,8 @@ Result Runtime::run_program(){
 
 Result Runtime::run_program(int startLine){
   Result r;
+  RtSigintScope _rt_sig_scope;  // enable Ctrl-C -> interrupt during program run
+
   if(program.empty()) return r;
 
   std::vector<int> lines; lines.reserve(program.size());
@@ -248,6 +274,7 @@ Result Runtime::run_program(int startLine){
   std::vector<int> gosubStack;
 
   while(i >= 0 && i < (int)lines.size()){
+    if (rt_interrupted()) { r.err = Error{ lines[i], "Interrupted (Ctrl-C)" }; break; }
     int lineNo = lines[i];
     std::string src = program[lineNo];
 
@@ -331,6 +358,19 @@ static std::vector<std::string> glob_items(const std::string& pat){
   return out;
 }
 #endif
+
+
+static void rng_autoseed(Runtime& rt){
+  if (rt.rng_seeded) return;
+  uint64_t s = (uint64_t)std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  s ^= (uint64_t)(uintptr_t)&rt;               // per-instance spice
+  try {
+    std::random_device rd;
+    s ^= ((uint64_t)rd() << 32) ^ rd();
+  } catch (...) {}                             // okay if rd() not available
+  rt.rng.seed(s);
+  rt.rng_seeded = true;
+}
 
 Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Value>& args){
   std::string up = qname;
@@ -455,6 +495,45 @@ Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Val
     auto itp = rt.vars.find("PB_PROMPT_TMPL");
     return itp==rt.vars.end()? str("") : itp->second;
   }
+
+  // --- RNG.* ---------------------------------------------------------------
+    if (up=="RNG.SEED" && (wantN(0) || wantN(1))) {
+    uint64_t seed;
+    if (wantN(0)) {
+        // entropy-based seed
+        uint64_t s = (uint64_t)std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        try { std::random_device rd; s ^= ((uint64_t)rd() << 32) ^ rd(); } catch (...) {}
+        seed = s;
+    } else {
+        seed = (uint64_t)asD(0);
+    }
+    rt.rng.seed(seed);
+    rt.rng_seeded = true;
+    return Value{}; // no result
+    }
+
+    if (up=="RNG.INT" && (wantN(2) || wantN(1) || wantN(0))) {
+    rng_autoseed(rt);
+    long long lo = 0, hi = 0x7fffffff; // defaults
+    if (wantN(1)) { hi = (long long)asD(0); }
+    else if (wantN(2)) { lo = (long long)asD(0); hi = (long long)asD(1); }
+    if (hi < lo) std::swap(lo, hi);
+    std::uniform_int_distribution<long long> dist(lo, hi);
+    return num((Number)dist(rt.rng));
+    }
+
+    if (up=="RNG.FLOAT" && wantN(0)) {
+    rng_autoseed(rt);
+    std::uniform_real_distribution<double> dist(0.0, 1.0); // [0,1)
+    return num((Number)dist(rt.rng));
+    }
+
+    // Optional friendly alias (classic BASIC vibe)
+    if (up=="RAND" && wantN(0)) {
+    rng_autoseed(rt);
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    return num((Number)dist(rt.rng));
+    }
 
   // ------- UI.* stubs for CLI builds
   if(starts_with(up, "UI.")) return Value{};
