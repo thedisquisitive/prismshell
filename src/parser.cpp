@@ -195,7 +195,7 @@ StmtPtr Parser::parseStmt() {
       e = b;
 
       // If a semicolon was used between items, also suppress newline (classic vibe).
-      if(isSemi) newline = false;
+      //if(isSemi) newline = false;
       continue;
     }
     break;

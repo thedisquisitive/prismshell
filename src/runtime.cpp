@@ -320,18 +320,93 @@ bool Runtime::save(const std::string& path){
 
 bool Runtime::load(const std::string& path){
   program.clear();
+
   std::ifstream f(path);
   if(!f) return false;
-  std::string line;
-  while(std::getline(f, line)){
-    std::string t = trim(line);
-    if(t.empty()) continue;
-    auto sp = t.find(' ');
-    if(sp == std::string::npos) continue;
-    int n = std::stoi(t.substr(0, sp));
-    std::string src = trim(t.substr(sp + 1));
-    program[n] = src;
+
+  // Read entire file so we can handle BOM/shebang and detect format
+  std::string content((std::istreambuf_iterator<char>(f)),
+                      std::istreambuf_iterator<char>());
+
+  // Strip UTF-8 BOM if present
+  if(content.size() >= 3 &&
+     (unsigned char)content[0] == 0xEF &&
+     (unsigned char)content[1] == 0xBB &&
+     (unsigned char)content[2] == 0xBF){
+    content.erase(0, 3);
   }
+
+  // Strip shebang if present
+  if(!content.empty() && content.rfind("#!", 0) == 0){
+    auto nl = content.find('\n');
+    content = (nl == std::string::npos) ? std::string() : content.substr(nl+1);
+  }
+
+  // Helpers
+  auto is_all_digits = [](const std::string& s)->bool{
+    if(s.empty()) return false;
+    for(unsigned char c : s) if(!std::isdigit(c)) return false;
+    return true;
+  };
+
+  auto is_comment_line = [](const std::string& t)->bool{
+    if(t.empty()) return false;
+    // Leading apostrophe comment
+    if(t[0] == '\'') return true;
+    // Case-insensitive "REM" at start
+    if(t.size() >= 3){
+      unsigned char c0 = (unsigned char)t[0];
+      unsigned char c1 = (unsigned char)t[1];
+      unsigned char c2 = (unsigned char)t[2];
+      if(std::toupper(c0) == 'R' && std::toupper(c1) == 'E' && std::toupper(c2) == 'M')
+        return true;
+    }
+    return false;
+  };
+
+  // Decide if numbered (first non-empty, non-comment line begins with digit)
+  bool numbered = true;
+  {
+    std::istringstream iss(content);
+    std::string line;
+    while(std::getline(iss, line)){
+      std::string t = trim(line);
+      if(t.empty()) continue;
+      if(is_comment_line(t)) continue;
+      numbered = std::isdigit((unsigned char)t[0]) != 0;
+      break;
+    }
+  }
+
+  if(numbered){
+    // Classic: "10 PRINT ...", tolerant parsing
+    std::istringstream iss(content);
+    std::string line;
+    while(std::getline(iss, line)){
+      std::string t = trim(line);
+      if(t.empty()) continue;
+      auto sp = t.find(' ');
+      if(sp == std::string::npos) continue;     // ignore malformed lines
+      std::string num = t.substr(0, sp);
+      if(!is_all_digits(num)) continue;         // skip non-numeric leaders
+      int n = 0;
+      try { n = std::stoi(num); } catch(...) { continue; } // guard stoi
+      std::string src = trim(t.substr(sp + 1));
+      program[n] = src;
+    }
+  } else {
+    // Free-form BASIC: auto-number at 10,20,30,...; skip blank & comment lines
+    std::istringstream iss(content);
+    std::string line; int n = 10;
+    while(std::getline(iss, line)){
+      std::string t = trim(line);
+      if(t.empty()) continue;
+      if(is_comment_line(t)) continue;
+      program[n] = t;
+      n += 10;
+    }
+  }
+
   return true;
 }
 
