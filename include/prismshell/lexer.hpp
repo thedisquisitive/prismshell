@@ -10,7 +10,7 @@ enum class TokKind {
 End, Id, Num, Str,
 Plus, Minus, Star, Slash,
 LParen, RParen, Comma, Semi,
-Eq, Ne, Lt, Le, Gt, Ge,
+Eq, Ne, Lt, Le, Gt, Ge, Caret,
 Let, Print, Input, If, Then, Else, EndTok, Rem,
 Goto, Gosub, ReturnTok,
 Call,

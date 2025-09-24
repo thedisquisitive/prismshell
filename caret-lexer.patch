@@ -1,0 +1,15 @@
+diff --git a/src/lexer.cpp b/src/lexer.cpp
+--- a/src/lexer.cpp
++++ b/src/lexer.cpp
+@@
+-    switch(c){
++    switch(c){
+       case '+': push(TokKind::Plus); break;
+       case '-': push(TokKind::Minus); break;
+       case '*': push(TokKind::Star); break;
+       case '/': push(TokKind::Slash); break;
++      case '^': push(TokKind::Caret); break;
+       case '(': push(TokKind::LParen); break;
+       case ')': push(TokKind::RParen); break;
+       case ',': push(TokKind::Comma); break;
+       case ';': push(TokKind::Semi); break;

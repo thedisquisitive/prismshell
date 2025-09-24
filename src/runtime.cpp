@@ -15,6 +15,8 @@
 #include <chrono>
 #include <ctime>
 #include <random>
+#include <iomanip>
+#include <cmath>
 
 #ifndef _WIN32
   #include <unistd.h>
@@ -165,6 +167,7 @@ Value Runtime::eval(const ExprPtr& e){
       double rn = std::holds_alternative<Number>(R) ? std::get<Number>(R) : std::atof(to_string(R).c_str());
       if(e->op=='-') return num(ln - rn);
       if(e->op=='*') return num(ln * rn);
+      if (e->op == '^') return num(std::pow(ln, rn));
       if(e->op=='/') return num(rn == 0.0 ? 0.0 : ln / rn);
       return {};
     }
@@ -618,6 +621,22 @@ Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Val
 
   // ------- PrismFS verbs (stubbed)
   if(up=="MOUNT.ADD" || up=="SNAPSHOT" || up=="BRANCH" || up=="CHECKOUT") return Value{};
+
+  // ------- TIME.*
+  if (up=="TIME.NOW" && wantN(0)) {
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    std::time_t t = system_clock::to_time_t(now);
+    std::tm tm{};
+  #ifdef _WIN32
+    localtime_s(&tm, &t);
+  #else
+    localtime_r(&t, &tm);
+  #endif
+    std::ostringstream os;
+    os << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return str(os.str());
+  }
 
   // Unknown -> empty
   return Value{};

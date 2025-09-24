@@ -77,6 +77,17 @@ ExprPtr Parser::parseFactor() {
 
 ExprPtr Parser::parseTerm() {
   auto left = parseFactor();
+
+  // exponentiation (higher precedence than * and /)
+  while (!eof() && peek().k == TokKind::Caret) {
+    pop(); // '^'
+    auto right = parseFactor();
+    auto b = std::make_shared<Expr>();
+    b->kind = Expr::Bin; b->op = '^'; b->left = left; b->right = right;
+    left = b;
+  }
+
+  // multiplication / division
   while (!eof() && (peek().k == TokKind::Star || peek().k == TokKind::Slash)) {
     char op = (peek().k == TokKind::Star ? '*' : '/');
     pop();
@@ -87,6 +98,7 @@ ExprPtr Parser::parseTerm() {
   }
   return left;
 }
+
 
 ExprPtr Parser::parseExpr() {
   // additive layer

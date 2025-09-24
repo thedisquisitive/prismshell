@@ -101,6 +101,7 @@ std::vector<Token> Lexer::lex(){
       case ',': push(TokKind::Comma); break;
       case ';': push(TokKind::Semi); break;
       case '=': push(TokKind::Eq); break;
+      case '^': push(TokKind::Caret); break;
       case '<':
         if(pos<(int)src.size() && src[pos]=='='){ ++pos; push(TokKind::Le); }
         else if(pos<(int)src.size() && src[pos]=='>'){ ++pos; push(TokKind::Ne); }

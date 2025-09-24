@@ -1,0 +1,30 @@
+diff --git a/src/parser.cpp b/src/parser.cpp
+--- a/src/parser.cpp
++++ b/src/parser.cpp
+@@
+-ExprPtr Parser::parseTerm() {
+-  auto left = parseFactor();
+-  while (!eof() && (peek().k == TokKind::Star || peek().k == TokKind::Slash)) {
++ExprPtr Parser::parseTerm() {
++  auto left = parseFactor();
++
++  // exponentiation (higher precedence than * and /)
++  while (!eof() && peek().k == TokKind::Caret) {
++    pop(); // consume '^'
++    auto right = parseFactor();
++    auto b = std::make_shared<Expr>();
++    b->kind = Expr::Bin; b->op = '^'; b->left = left; b->right = right;
++    left = b;
++  }
++
++  // multiplication / division
++  while (!eof() && (peek().k == TokKind::Star || peek().k == TokKind::Slash)) {
+     char op = (peek().k == TokKind::Star ? '*' : '/');
+     pop();
+     auto right = parseFactor();
+     auto b = std::make_shared<Expr>();
+     b->kind = Expr::Bin; b->op = op; b->left = left; b->right = right;
+     left = b;
+   }
+   return left;
+ }
