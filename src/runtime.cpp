@@ -206,7 +206,10 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
     } break;
 
     case Stmt::Gosub: {
-      gosubStack.push_back(*pc);
+      // return address = first line strictly greater than current
+      auto it = program.upper_bound(*pc);
+      int ret = (it == program.end()) ? std::numeric_limits<int>::max() : it->first;
+      gosubStack.push_back(ret);
       *pc = s->targetLine;
     } break;
 
