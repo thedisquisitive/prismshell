@@ -35,7 +35,15 @@ struct Expr {
 };
 
 struct Stmt {
-  enum Kind { Let, Print, Input, If, Goto, Gosub, Return, Call, End, Rem } kind;
+  enum Kind {
+    Rem, Let, Print, Input,
+    If, Goto, Gosub, Return, Call, End,
+    While, Wend,
+    IfThenBlk,   // "IF <expr> THEN" (EOL) — block header
+    ElseIfThen,  // "ELSEIF <expr> THEN"
+    ElseBlk,     // "ELSE"
+    EndIf        // "ENDIF"   (use single-word ENDIF for simplicity)
+  } kind{};
   int line{0};
 
   // LET
@@ -81,5 +89,18 @@ private:
 
   StmtPtr parseStmt();
 };
+
+// Is the first token of a line an Id equal to kw (case-insensitive)?
+static bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
+  Lexer lx(src, line);
+  auto ts = lx.lex();
+  if(ts.empty()) return false;
+  const auto& t = ts[0];
+  if(t.k != TokKind::Id) return false;
+  std::string u = t.text;
+  for(char& c : u) c = (char)std::toupper((unsigned char)c);
+  return u == kw;
+}
+
 
 } // namespace pb

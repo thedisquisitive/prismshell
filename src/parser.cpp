@@ -9,6 +9,10 @@ namespace pb {
 /* ------------------- basic stream utilities ------------------- */
 Token Parser::pop() { return ts[i++]; }
 bool  Parser::match(TokKind k) { if (!eof() && ts[i].k == k) { ++i; return true; } return false; }
+// case-insensitive uppercase helper for Id tokens
+static inline std::string up(const std::string& s){
+  std::string r = s; for(char& c: r) c = (char)std::toupper((unsigned char)c); return r;
+}
 
 static inline bool is_cmp(TokKind k) {
   switch (k) {
@@ -149,6 +153,25 @@ StmtPtr Parser::parseStmt() {
     return s;
   }
 
+  // --- WHILE / WEND (no lexer keyword needed; accept Id "WHILE"/"WEND") ---
+  if (!eof() && peek().k == TokKind::Id) {
+    std::string u = up(peek().text);
+    if (u == "WHILE") {
+      pop();                                  // consume WHILE
+      auto cond = parseExpr();                // parse condition to end-of-line
+      auto s = std::make_shared<Stmt>();
+      s->kind = Stmt::While; s->line = t.line; s->ifCond = cond;
+      return s;
+    }
+    if (u == "WEND") {
+      pop();                                  // consume WEND
+      auto s = std::make_shared<Stmt>();
+      s->kind = Stmt::Wend; s->line = t.line;
+      return s;
+    }
+  }
+
+
   if (t.k == TokKind::Let) {
     pop();
     if (peek().k != TokKind::Id) return nullptr;
@@ -233,18 +256,55 @@ StmtPtr Parser::parseStmt() {
   }
 
   if (t.k == TokKind::If) {
-    pop();
+    auto t_if = pop();                 // consume IF
     auto cond = parseExpr();
-    if (!match(TokKind::Then)) return nullptr; // THEN GOTO <line> or THEN <line>
-    if (peek().k == TokKind::Goto) pop();
+    if (!match(TokKind::Then)) return nullptr;
+
+    // MULTILINE IF if line ends right after THEN
+    if (peek().k == TokKind::End) {
+      auto s = std::make_shared<Stmt>();
+      s->kind = Stmt::IfThenBlk; s->line = t_if.line; s->ifCond = cond;
+      return s;
+    }
+
+    // SINGLE-LINE IF ... THEN <line> (existing behavior preserved)
+    if (peek().k == TokKind::Goto) pop();     // optional GOTO
     if (peek().k == TokKind::Num) {
       int tgt = std::stoi(pop().text);
       auto s = std::make_shared<Stmt>();
-      s->kind = Stmt::If; s->line = t.line; s->ifCond = cond; s->thenLine = tgt;
+      s->kind = Stmt::If; s->line = t_if.line; s->ifCond = cond; s->thenLine = tgt;
       return s;
     }
     return nullptr;
   }
+
+  // ELSEIF <expr> THEN   (accepts identifier "ELSEIF")
+  if (!eof() && peek().k == TokKind::Id && up(peek().text) == "ELSEIF") {
+    auto t_ei = pop();
+    auto cond = parseExpr();
+    if (!match(TokKind::Then)) return nullptr;
+    if (peek().k != TokKind::End) return nullptr; // must end line
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::ElseIfThen; s->line = t_ei.line; s->ifCond = cond;
+    return s;
+  }
+
+  // ELSE   (token Else from lexer)
+  if (!eof() && peek().k == TokKind::Else) {
+    auto t_else = pop();
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::ElseBlk; s->line = t_else.line;
+    return s;
+  }
+
+  // ENDIF   (accept single-word identifier "ENDIF" for simplicity)
+  if (!eof() && peek().k == TokKind::Id && up(peek().text) == "ENDIF") {
+    auto t_endif = pop();
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::EndIf; s->line = t_endif.line;
+    return s;
+  }
+
 
   if (t.k == TokKind::Goto) {
     pop();

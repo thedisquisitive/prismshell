@@ -32,6 +32,23 @@ namespace fs = std::filesystem;
 
 namespace pb {
 
+  // Take the first token as uppercase string (or "")
+  static inline std::string first_kw(const std::string& src, int line){
+    Lexer lx(src, line);
+    auto ts = lx.lex();
+    if(ts.empty()) return "";
+    std::string u = ts[0].text;
+    for(char& c: u) c = (char)std::toupper((unsigned char)c);
+    return u; // works for Ids and keywords with text
+  }
+
+  // Return the next line number after 'line' (or max if end)
+  static inline int next_line_after(const std::map<int,std::string>& program, int line){
+    auto it = program.upper_bound(line);
+    return (it == program.end()) ? std::numeric_limits<int>::max() : it->first;
+  }
+
+
 /* ---------------- SIGINT handling for program run ---------------- */
 namespace {
   inline std::atomic_bool g_rt_sigint{false};
@@ -204,6 +221,89 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
       if(truthy(eval(s->ifCond))) *pc = s->thenLine;
     } break;
 
+    // IF ... THEN   (block header)
+    case Stmt::IfThenBlk: {
+      // If condition is FALSE: jump to first satisfied ELSEIF, or ELSE, or after ENDIF
+      if(!truthy(eval(s->ifCond))){
+        int cur = s->line;
+        int depth = 0;
+        int jump = std::numeric_limits<int>::max();
+
+        for(auto it = program.upper_bound(cur); it != program.end(); ++it){
+          int ln = it->first;
+          std::string kw = first_kw(it->second, ln);
+
+          if(kw == "IF"){ ++depth; continue; }      // nested IF
+          if(kw == "ENDIF"){
+            if(depth == 0){ jump = next_line_after(program, ln); break; }
+            --depth; continue;
+          }
+
+          if(depth > 0) continue;                   // still inside nested IF, ignore
+
+          if(kw == "ELSEIF"){
+            // Evaluate this ELSEIF's condition: lex/parse just this line
+            Lexer lx(it->second, ln);
+            Parser p(lx.lex());
+            auto po = p.parse();
+            if(!po.err && !po.stmts.empty()){
+              auto he = po.stmts.front(); // ElseIfThen
+              if(truthy(eval(he->ifCond))){
+                jump = next_line_after(program, ln); // start executing body lines
+                break;
+              } else {
+                continue; // check next branch
+              }
+            }
+          }
+          if(kw == "ELSE"){
+            jump = next_line_after(program, ln);
+            break;
+          }
+        }
+
+        *pc = jump;  // skip the whole IF block if no branch hit
+      }
+    } break;
+
+    // ELSEIF ... THEN   (if we *fall through* here, a previous branch already ran → skip to ENDIF)
+    case Stmt::ElseIfThen: {
+      // Skip to after matching ENDIF at same nesting depth
+      int cur = s->line, depth = 0;
+      int jump = std::numeric_limits<int>::max();
+      for(auto it = program.upper_bound(cur); it != program.end(); ++it){
+        int ln = it->first;
+        std::string kw = first_kw(it->second, ln);
+        if(kw == "IF"){ ++depth; continue; }
+        if(kw == "ENDIF"){
+          if(depth == 0){ jump = next_line_after(program, ln); break; }
+          --depth;
+        }
+      }
+      *pc = jump;
+    } break;
+
+    // ELSE   (fallthrough means a prior branch ran → skip to ENDIF)
+    case Stmt::ElseBlk: {
+      int cur = s->line, depth = 0;
+      int jump = std::numeric_limits<int>::max();
+      for(auto it = program.upper_bound(cur); it != program.end(); ++it){
+        int ln = it->first;
+        std::string kw = first_kw(it->second, ln);
+        if(kw == "IF"){ ++depth; continue; }
+        if(kw == "ENDIF"){
+          if(depth == 0){ jump = next_line_after(program, ln); break; }
+          --depth;
+        }
+      }
+      *pc = jump;
+    } break;
+
+    // ENDIF — no-op
+    case Stmt::EndIf: {
+      // nothing
+    } break;
+
     case Stmt::Goto: {
       *pc = s->targetLine;
     } break;
@@ -227,6 +327,50 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
       lastCall = call_dispatch(*this, s->callName, args);
       vars["_"] = lastCall;
     } break;
+
+    case Stmt::While: {
+      // If condition is false, skip to after matching WEND (handle nesting)
+      if(!truthy(eval(s->ifCond))){
+        int cur = s->line;
+        int depth = 0;
+        int target = std::numeric_limits<int>::max();
+        for(auto it = program.upper_bound(cur); it != program.end(); ++it){
+          int ln = it->first;
+          const std::string& src = it->second;
+          if(first_token_is_id_kw(src, ln, "WHILE")) { ++depth; continue; }
+          if(first_token_is_id_kw(src, ln, "WEND")){
+            if(depth == 0){
+              auto it2 = program.upper_bound(ln);
+              target = (it2 == program.end()) ? std::numeric_limits<int>::max() : it2->first;
+              break;
+            } else {
+              --depth;
+            }
+          }
+        }
+        *pc = target;
+      }
+    } break;
+
+    case Stmt::Wend: {
+      // Jump back to matching WHILE to re-check the condition
+      int cur = s->line;
+      int depth = 0;
+      int target = program.begin()->first;
+      auto it = program.lower_bound(cur);
+      while(it != program.begin()){
+        --it;
+        int ln = it->first;
+        const std::string& src = it->second;
+        if(first_token_is_id_kw(src, ln, "WEND")) { ++depth; continue; }
+        if(first_token_is_id_kw(src, ln, "WHILE")){
+          if(depth == 0){ target = ln; break; }
+          else { --depth; }
+        }
+      }
+      *pc = target;
+    } break;
+
 
     case Stmt::End: {
       *pc = std::numeric_limits<int>::max();
