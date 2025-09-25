@@ -1,3 +1,4 @@
+#!/usr/bin/env prismshell
 ' ================================================
 ' PrismBASIC — Feature Demo (grammar-safe + blocks)
 ' ================================================
@@ -7,8 +8,8 @@
 10  PRINT "Welcome to the PrismBASIC feature demo."
 20  PRINT
 
-30  PRINT "Time now: ";
-40  CALL Time.Now()
+'30  PRINT "Time now: ";
+'40  CALL Time.Now()
 50  PRINT _
 
 60  PRINT "Current directory: ";

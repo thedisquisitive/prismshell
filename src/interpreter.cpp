@@ -24,6 +24,7 @@ extern "C" {
 extern int rl_catch_signals;
 }
 #endif
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -473,35 +474,97 @@ void Interpreter::repl(const char* /*prompt_ignored*/){
   }
 }
 
-// Run a file/script
-int Interpreter::run_file(const std::string& path, const std::vector<std::string>& args){
-  std::ifstream f(path); if(!f){ std::cerr<<"No such file: "<<path<<"\n"; return 1; }
-  std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-  if(!content.empty() && content.rfind("#!",0)==0){ auto nl=content.find('\n'); content = (nl==std::string::npos)?std::string():content.substr(nl+1); }
-
-  rt.vars["PB_ARGV"] = json_array(args);
-
-  // detect numbered vs freeform
-  std::istringstream iss(content); std::string line; bool numbered=true;
-  while(std::getline(iss,line)){ std::string t=trim(line); if(t.empty()) continue; if(!std::isdigit((unsigned char)t[0])){ numbered=false; break; } }
-
-  rt.program.clear();
-  if(numbered){
-    std::istringstream iss2(content);
-    while(std::getline(iss2,line)){
-      std::string t=trim(line); if(t.empty()) continue;
-      auto sp=t.find(' '); if(sp==std::string::npos) continue;
-      int n=std::stoi(t.substr(0,sp)); std::string src=trim(t.substr(sp+1));
-      rt.program[n]=src;
+  /// Run a file/script
+  int Interpreter::run_file(const std::string& path, const std::vector<std::string>& args){
+    std::ifstream f(path);
+    if(!f){
+      std::cerr << "No such file: " << path << "\n";
+      return 1;
     }
-  }else{
-    std::istringstream iss2(content); int n=10;
-    while(std::getline(iss2,line)){ std::string t=trim(line); if(t.empty()) continue; rt.program[n]=t; n+=10; }
+
+    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+    // Strip shebang if present
+    if(!content.empty() && content.rfind("#!", 0) == 0){
+      auto nl = content.find('\n');
+      content = (nl == std::string::npos) ? std::string() : content.substr(nl + 1);
+    }
+
+    // Pass argv to program
+    rt.vars["PB_ARGV"] = json_array(args);
+
+    // Helper: detect BASIC comment line after trimming
+    auto is_comment_line = [](const std::string& t)->bool{
+      if(t.empty()) return false;
+      if(t[0] == '\'') return true;                        // apostrophe comment
+      if(t.size() >= 3){
+        unsigned char c0 = (unsigned char)t[0];
+        unsigned char c1 = (unsigned char)t[1];
+        unsigned char c2 = (unsigned char)t[2];
+        if(std::toupper(c0)=='R' && std::toupper(c1)=='E' && std::toupper(c2)=='M')
+          return true;                                     // REM comment
+      }
+      return false;
+    };
+
+    // Decide: numbered vs free-form (skip blanks & comments)
+    std::istringstream iss(content);
+    std::string line;
+    bool numbered = true;
+    while(std::getline(iss, line)){
+      std::string t = trim(line);
+      if(t.empty()) continue;
+      if(is_comment_line(t)) continue;
+      numbered = std::isdigit((unsigned char)t[0]) != 0;
+      break;
+    }
+
+    // Build program map
+    rt.program.clear();
+
+    if(numbered){
+      // Parse explicit line numbers
+      std::istringstream iss2(content);
+      while(std::getline(iss2, line)){
+        std::string t = trim(line);
+        if(t.empty()) continue;
+
+        // Expect: "<digits><space>rest..."
+        auto sp = t.find(' ');
+        if(sp == std::string::npos) continue;
+
+        const std::string num = t.substr(0, sp);
+        bool all_digits = !num.empty() &&
+          std::all_of(num.begin(), num.end(), [](unsigned char c){ return std::isdigit(c); });
+        if(!all_digits) continue;
+
+        int n = 0;
+        try { n = std::stoi(num); }
+        catch (...) { continue; }
+
+        std::string src = trim(t.substr(sp + 1));
+        rt.program[n] = src;
+      }
+    }else{
+      // Auto-number free-form lines (skip blanks & comments)
+      std::istringstream iss2(content);
+      int n = 10;
+      while(std::getline(iss2, line)){
+        std::string t = trim(line);
+        if(t.empty()) continue;
+        if(is_comment_line(t)) continue;      // don't inject banner/comments as code
+        rt.program[n] = t;
+        n += 10;
+      }
+    }
+
+    auto r = rt.run_program();
+    if(r.err){
+      std::cerr << "Error at " << r.err->line << ": " << r.err->msg << "\n";
+      return 2;
+    }
+    return 0;
   }
 
-  auto r = rt.run_program();
-  if(r.err){ std::cerr<<"Error at "<<r.err->line<<": "<<r.err->msg<<"\n"; return 2; }
-  return 0;
-}
 
 } // namespace pb
