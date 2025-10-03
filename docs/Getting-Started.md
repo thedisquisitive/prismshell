@@ -52,3 +52,12 @@ Lines that don’t parse as BASIC (and aren’t numbered) are executed by `/bin/
 echo "hi there"
 grep -R "TODO" src
 ```
+
+
+### Autostart mods
+Create `~/.prismrc` to control which mods run at launch:
+
+```
+autoload_all = 0
+autostart = prompt.bas
+```

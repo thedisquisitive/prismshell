@@ -49,3 +49,29 @@ mods disable <name>
 mods reload
 mods run <name> [args...]
 ```
+
+## Discovery vs Autostart
+
+At startup the shell **discovers and registers** all `.bas` files found in:
+
+- `./mods`
+- `~/.config/prismshell/mods`
+- `/usr/local/share/prismshell/mods`
+
+Registration makes the commands available (via `CALL Mod.List()`), but **does not execute** the mod's top‑level code.
+
+Autostart is controlled by `~/.prismrc`:
+
+```
+# ~/.prismrc
+autoload_all = 0                  # default: only run the listed ones
+autostart = prompt.bas            # space or comma separated; extension optional
+# autoload_all = 1                # legacy mode: execute *all* registered mods
+```
+
+- If `autoload_all = 1`, every registered mod is executed on launch (legacy behavior).
+- Otherwise, only the names listed in `autostart` run at startup. If omitted, default is `prompt.bas`.
+
+Environment overrides:
+- `PRISMRC` — absolute path to an alternate rc file.
+- `PRISMRC_HOME` — alternate home dir (for resolving `~/.prismrc`).

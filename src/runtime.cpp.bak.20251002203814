@@ -644,27 +644,6 @@ Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Val
   // ------- FS.* (use error_code to avoid throwing)
   std::error_code ec;
 
-  // ===== New filesystem verbs =====
-  if (up=="FS.CD" && wantN(1)) { fs::current_path(asS(0), ec); return num(ec ? 0.0 : 1.0); }
-  if (up=="FS.MKDIR" && (wantN(1) || wantN(2))) { bool parents = wantN(2) ? (truthy(args[1])) : true; bool ok = parents ? fs::create_directories(asS(0), ec) : fs::create_directory(asS(0), ec); return num((ok && !ec) ? 1.0 : 0.0); }
-  if (up=="FS.RMDIR" && wantN(1)) { bool ok = fs::remove(asS(0), ec); return num((ok && !ec) ? 1.0 : 0.0); }
-  if (up=="FS.REMOVEALL" && wantN(1)) { fs::remove_all(asS(0), ec); return num(ec ? 0.0 : 1.0); }
-  if (up=="FS.COPY" && (wantN(2) || wantN(3))) { fs::copy_options opts = fs::copy_options::none; bool recursive = wantN(3) ? truthy(args[2]) : false; if (recursive) opts |= fs::copy_options::recursive | fs::copy_options::directories_only; opts |= fs::copy_options::overwrite_existing; fs::copy(asS(0), asS(1), opts, ec); return num(ec ? 0.0 : 1.0); }
-  if (up=="FS.MOVE" && wantN(2)) { fs::rename(asS(0), asS(1), ec); if (ec) { ec.clear(); fs::copy(asS(0), asS(1), fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec); if (!ec) { fs::remove_all(asS(0)); } } return num(ec ? 0.0 : 1.0); }
-  if (up=="FS.TOUCH" && wantN(1)) { auto p = fs::path(asS(0)); if (!fs::exists(p, ec)) { std::ofstream f(asS(0)); if (!f) return num(0.0); } auto now = fs::file_time_type::clock::now(); fs::last_write_time(p, now, ec); return num(ec ? 0.0 : 1.0); }
-  if (up=="FS.SIZE" && wantN(1)) { auto sz = fs::file_size(asS(0), ec); if (ec) return num(0.0); return num((Number)sz); }
-  if (up=="FS.ISDIR" && wantN(1)) { bool ok = fs::is_directory(asS(0), ec); return num((ok && !ec) ? 1.0 : 0.0); }
-  if (up=="FS.MTIME" && wantN(1)) { auto tp = fs::last_write_time(asS(0), ec); if (ec) return num(0.0); auto s = std::chrono::time_point_cast<std::chrono::seconds>(tp).time_since_epoch().count(); return num((Number)s); }
-  // ===== End new filesystem verbs =====
-
-  // ===== New path helpers (pure string transforms) =====
-  if (up=="PATH.JOIN" && wantN(2)) { return str( (fs::path(asS(0)) / asS(1)).string() ); }
-  if (up=="PATH.DIRNAME" && wantN(1)) { return str( fs::path(asS(0)).parent_path().string() ); }
-  if (up=="PATH.BASENAME" && wantN(1)) { return str( fs::path(asS(0)).filename().string() ); }
-  if (up=="PATH.EXT" && wantN(1)) { return str( fs::path(asS(0)).extension().string() ); }
-  // ===== End path helpers =====
-
-
   if(up=="FS.READ" && wantN(1)){
     std::ifstream f(asS(0));
     if(!f) return str("");

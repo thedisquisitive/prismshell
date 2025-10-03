@@ -68,3 +68,50 @@ User SUB routines and arrays will be added in future releases.
 .BR prismshell (1),
 .BR prismshell-mods (7),
 .BR prismshell-prompt (7)
+
+
+.SH FILESYSTEM CALLS
+.TP
+.B CALL FS.CD(path)
+Change current directory; returns 1 on success.
+.TP
+.B CALL FS.MKDIR(path[,parents])
+Create directory; parents defaults to 1. Returns 1 on success.
+.TP
+.B CALL FS.RMDIR(path)
+Remove empty directory; returns 1 if removed.
+.TP
+.B CALL FS.REMOVEALL(path)
+Recursively delete file or directory; returns 1 on success.
+.TP
+.B CALL FS.COPY(src,dst[,rec])
+Copy file or directory; rec=1 for recursive. Returns 1 on success.
+.TP
+.B CALL FS.MOVE(src,dst)
+Rename/move; may fallback to copy+remove. Returns 1 on success.
+.TP
+.B CALL FS.TOUCH(path)
+Create file if missing and update timestamp. Returns 1 on success.
+.TP
+.B CALL FS.SIZE(path)
+Return file size in bytes (Number). 0 on error.
+.TP
+.B CALL FS.ISDIR(path)
+Return 1 if path is a directory, else 0.
+.TP
+.B CALL FS.MTIME(path)
+Return last write time (UNIX seconds).
+
+.SH PATH HELPERS
+.TP
+.B CALL PATH.JOIN(a,b)
+Join two path segments.
+.TP
+.B CALL PATH.DIRNAME(path)
+Return the parent directory string.
+.TP
+.B CALL PATH.BASENAME(path)
+Return the filename component.
+.TP
+.B CALL PATH.EXT(path)
+Return the extension including dot (e.g. ".txt").

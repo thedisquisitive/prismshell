@@ -104,6 +104,85 @@ static std::vector<std::string> tokenize_quoted(const std::string& line){
   return out;
 }
 
+// ---------------- PrismRC: ~/.prismrc ----------------
+namespace {
+  struct PrismRC {
+    std::string mods_path = "mods";         // reserved for future search path override
+    bool autoload_all = false;              // if true, autostart every discovered mod
+    std::vector<std::string> autostart;     // filenames to autostart (order preserved)
+  };
+
+  static inline std::string pb_rc_ltrim(std::string s){
+    size_t i = 0;
+    while (i < s.size() && std::isspace((unsigned char)s[i])) ++i;
+    return s.substr(i);
+  }
+  static inline std::string pb_rc_rtrim(std::string s){
+    if (s.empty()) { return s; }
+    size_t i = s.size();
+    while (i > 0 && std::isspace((unsigned char)s[i-1])) { --i; }
+    return s.substr(0, i);
+  }
+  static inline std::string pb_rc_trim(std::string s){
+    return pb_rc_rtrim(pb_rc_ltrim(std::move(s)));
+  }
+
+  static std::vector<std::string> pb_rc_splitWordsOrCSV(const std::string& v){
+    std::vector<std::string> out; std::string cur; bool inq=false; char q=0;
+    for(char c: v){
+      if(inq){ if(c==q) inq=false; else cur.push_back(c); continue; }
+      if(c=='"'||c=='\''){ inq=true; q=c; continue; }
+      if(std::isspace((unsigned char)c) || c==','){ if(!cur.empty()){ out.push_back(pb_rc_trim(cur)); cur.clear(); } continue; }
+      cur.push_back(c);
+    }
+    if(!cur.empty()) out.push_back(pb_rc_trim(cur));
+    std::vector<std::string> out2; for(auto&s: out){ auto t=pb_rc_trim(s); if(!t.empty()) out2.push_back(std::move(t)); }
+    return out2;
+  }
+
+  static std::string pb_rc_home(){
+  #ifdef _WIN32
+    if(const char* p=std::getenv("PRISMRC_HOME")) return p;
+    if(const char* p=std::getenv("USERPROFILE"))  return p;
+    if(const char* d=std::getenv("HOMEDRIVE")){
+      std::string hd=d; std::string hp=std::getenv("HOMEPATH")?std::getenv("HOMEPATH"):""; return hd+hp;
+    }
+    return ".";
+  #else
+    if(const char* p=std::getenv("PRISMRC_HOME")) return p;
+    if(const char* p=std::getenv("HOME"))         return p;
+    return ".";
+  #endif
+  }
+
+  static PrismRC loadPrismRC(){
+    PrismRC rc;
+    std::string rcPath;
+    if(const char* p = std::getenv("PRISMRC")) rcPath = p;
+    if(rcPath.empty()) rcPath = (std::filesystem::path(pb_rc_home()) / ".prismrc").string();
+
+    std::ifstream f(rcPath);
+    if(!f){ rc.autostart = {"prompt.bas"}; return rc; }
+
+    std::string line;
+    while(std::getline(f,line)){
+      auto h=line.find('#'); if(h!=std::string::npos) line.erase(h);
+      auto s=line.find(';'); if(s!=std::string::npos) line.erase(s);
+      line = pb_rc_trim(std::move(line)); if(line.empty()) continue;
+
+      auto eq=line.find('='); if(eq==std::string::npos) continue;
+      std::string key=pb_rc_trim(line.substr(0,eq)), val=pb_rc_trim(line.substr(eq+1));
+      for(char& c: key) c=(char)std::tolower((unsigned char)c);
+
+      if(key=="mods_path"   && !val.empty()) rc.mods_path = val;          // (not used yet)
+      else if(key=="autoload_all") rc.autoload_all = (val=="1"||val=="true"||val=="yes"||val=="on");
+      else if(key=="autostart")    rc.autostart = pb_rc_splitWordsOrCSV(val);
+    }
+    if(!rc.autoload_all && rc.autostart.empty()) rc.autostart = {"prompt.bas"};
+    return rc;
+  }
+} // namespace
+
 // query runtime for registered mods via CALL Mod.List()
 static std::vector<std::string> list_mod_names_via_call(Runtime& rt){
   (void)rt.run_line_direct("CALL Mod.List()", 0);
@@ -161,10 +240,10 @@ static void load_mod_file(Runtime& rt, const fs::path& p){
     }
   }
   mrt.vars["PB_ARGV"] = std::string("[]");
-  auto r = mrt.run_program();
-  if(r.err){
-    std::cerr << "Mod load error in " << p << " at " << r.err->line << ": " << r.err->msg << "\n";
-  }
+  int entry = mrt.program.empty() ? 0 : mrt.program.begin()->first;
+  std::string name = p.stem().string();
+  auto esc = [](const std::string& s){ std::string o; o.reserve(s.size()+4); for(char c: s){ if(c=='"') o += "\\\""; else o.push_back(c); } return o; };
+  (void)mrt.run_line_direct(std::string("CALL Mod.Register(\"")+esc(name)+"\", "+std::to_string(entry)+")", 0);
 }
 
 static std::vector<fs::path> mod_search_paths(){
@@ -365,8 +444,30 @@ void Interpreter::repl(const char* /*prompt_ignored*/){
   int last_status = 0;
   std::cout << "PrismBASIC Shell — MVP (type HELP)\n";
 
-  // Autoload mods on startup
-  autoload_mods(rt);
+
+// Discover & register all mods, then autostart per ~/.prismrc
+PrismRC rc = loadPrismRC();
+autoload_mods(rt);
+std::unordered_set<std::string> available;
+for (auto& n : list_mod_names_via_call(rt)) available.insert(n);
+std::vector<std::string> toRun;
+if (rc.autoload_all) {
+  toRun.assign(available.begin(), available.end());
+  std::sort(toRun.begin(), toRun.end());
+} else {
+  for (const auto& fname : rc.autostart) {
+    if (fname.empty()) continue;
+    std::string name = fname;
+    auto dot = name.find_last_of('.');
+    if (dot != std::string::npos) name = name.substr(0, dot);
+    if (available.count(name)) toRun.push_back(name);
+    else std::cerr << "[prismshell] warning: autostart mod not found: " << name << "\n";
+  }
+}
+for (const auto& m : toRun) {
+  if (g_disabled_mods.count(m)) continue;
+  (void)mod_run(m, {}, rt);
+}
 
   while(true){
     std::string line;

@@ -26,3 +26,6 @@ cmake --build . -j
 # run
 ./prismshell           # interactive
 ./prismshell demo.bas  # run a program
+
+
+**Autostart:** Control startup mods with `~/.prismrc` (defaults to `prompt.bas`).

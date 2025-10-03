@@ -1,0 +1,4 @@
+# ~/.prismrc
+# Only run the listed mods at startup. All mods are still discovered/registered.
+autoload_all = 0
+autostart = prompt.bas touch.bas

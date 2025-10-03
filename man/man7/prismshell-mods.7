@@ -75,3 +75,25 @@ and reviewing calls used by the mod.
 .BR prismshell (1),
 .BR prismshell-language (7),
 .BR prismshell-prompt (7)
+
+
+.SH AUTOSTART
+By default the shell registers all discovered mods but only executes a subset at startup.
+The set is controlled by the user's rc file:
+
+.PP
+~/.prismrc
+.PP
+.nf
+autoload_all = 0
+autostart = prompt.bas touch.bas
+.fi
+
+If
+.B autoload_all
+is set to 1, all registered mods execute on startup (legacy behavior).
+Environment overrides: 
+.B PRISMRC
+(path to rc) and 
+.B PRISMRC_HOME
+(home for resolving ~/.prismrc).
