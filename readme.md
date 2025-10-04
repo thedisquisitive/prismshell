@@ -332,7 +332,7 @@ Contributions welcome! Areas of interest:
 
 ## License
 
-[To be determined - please specify your license]
+[To be determined]
 
 ## Acknowledgments
 
