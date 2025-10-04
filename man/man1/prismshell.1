@@ -1,5 +1,4 @@
-
-.TH PRISMSHELL 1 "2025-09-21" "PrismBASIC" "User Commands"
+.TH PRISMSHELL 1 "2025-01-04" "PrismBASIC" "User Commands"
 .SH NAME
 prismshell \- PrismBASIC interactive shell and interpreter
 .SH SYNOPSIS
@@ -8,20 +7,22 @@ prismshell \- PrismBASIC interactive shell and interpreter
 .br
 Run without arguments for an interactive PrismBASIC shell.
 If FILE is given, it is executed as a PrismBASIC program; remaining
-arguments are exposed to the program (see ENVIRONMENT).
+arguments are exposed to the program via
+.B PB_ARGV
+(see ENVIRONMENT).
 .SH DESCRIPTION
 .B prismshell
-is a minimal retro BASIC shell with a line-numbered editor and a direct mode.
+is a retro BASIC shell featuring a line-numbered editor, direct execution mode,
+arrays, user-defined subroutines, and block control flow.
 Lines that do not parse as BASIC are executed by
 .BR /bin/sh (1)
 using
 .B /bin/sh \-lc
-for seamless use of standard Unix tools.
+for seamless integration with Unix tools.
 .P
-The MVP grammar includes expressions, assignments, printing, simple control flow,
-subroutine calls via
-.BR CALL ,
-and a subset of Prism-specific builtins (see CALLS).
+The current implementation includes Phase 1 features: arrays with dynamic sizing,
+user-defined SUBs with parameters and recursion, block IF/ELSEIF/ELSE/ENDIF,
+and WHILE/WEND loops.
 .P
 Shebang scripts are supported; begin files with:
 .P
@@ -29,100 +30,277 @@ Shebang scripts are supported; begin files with:
 #!/usr/bin/env prismshell
 .EE
 .SH INTERACTIVE COMMANDS
-The following meta commands are recognized in the REPL (not part of BASIC):
+The following meta commands are recognized in the REPL:
 .TP
 .B LIST
-List the current program (line-numbered).
+Display the current program (line-numbered).
 .TP
 .B RUN
-Execute the current program.
+Execute the current program from the beginning.
 .TP
 .B NEW
-Clear the program.
+Clear the program from memory.
 .TP
 .B SAVE \fIFILE\fR
-Save program to file.
+Save the current program to
+.IR FILE .
 .TP
 .B LOAD \fIFILE\fR
-Load program from file.
+Load program from
+.IR FILE .
 .TP
 .B BYE
 or
 .BR EXIT :
-Leave the shell.
+Exit the shell.
+.TP
+.B HELP
+Display brief help message.
 .TP
 .B mods
-Mod management (see
+Mod management commands (see
 .BR prismshell-mods (7)).
+.TP
+.B cd \fR[\fIpath\fR]
+Change directory (builtin; affects parent process).
+.TP
+.B pwd
+Print working directory (builtin).
 .SH BASIC OVERVIEW
-Line numbers enable the retro editor. Entering a bare line number deletes it.
+Line numbers enable the retro editor. Entering a bare line number deletes that line.
 .P
 .EX
-10 PRINT "Hello"
-20 INPUT A
-30 PRINT "You typed " + A
+10 PRINT "Hello, World!"
+20 INPUT name
+30 PRINT "Hello, "; name; "!"
 LIST
 RUN
+SAVE hello.bas
 .EE
 .P
-Direct mode accepts single lines:
+Direct mode executes single statements immediately:
 .P
 .EX
-PRINT 2+2
+PRINT 2 + 2
+LET x = 42
+PRINT "The answer: "; x
 CALL Env.Cwd()
 PRINT _
 .EE
-.SH CALLS
-The MVP implements these Prism builtins (all called via
-.BR CALL ):
+.SS Arrays
+Declare arrays with
+.B DIM
+using fixed or dynamic sizing:
+.P
+.EX
+DIM numbers[10]        ' Fixed size
+LET numbers[0] = 42
+
+DIM data[]             ' Dynamic (auto-expands)
+LET data[100] = 999
+.EE
+.SS Block Control Flow
+.P
+.EX
+IF score >= 90 THEN
+  PRINT "Grade: A"
+ELSEIF score >= 80 THEN
+  PRINT "Grade: B"
+ELSE
+  PRINT "Grade: F"
+ENDIF
+
+WHILE i < 10
+  PRINT i
+  LET i = i + 1
+WEND
+.EE
+.SS User Subroutines
+Define reusable procedures with
+.BR SUB :
+.P
+.EX
+SUB Double(x)
+  LET _ = x * 2
+END SUB
+
+SUB Factorial(n)
+  IF n <= 1 THEN
+    LET _ = 1
+  ELSE
+    CALL Factorial(n - 1)
+    LET _ = n * _
+  ENDIF
+END SUB
+
+CALL Double(21)
+PRINT "Result: "; _
+.EE
+.SH BUILTIN CALLS
+The following builtins are available via
+.BR CALL :
+.SS Environment
 .TP
 .B Env.Cwd()
-Return current working directory (string).
+Return current working directory.
 .TP
 .B Env.Args()
-Return argv for script execution. In MVP it is a JSON-ish string stored in
-.BR PB_ARGV .
+Return script arguments (from PB_ARGV).
 .TP
-.B Env.Get("VAR"), Env.Set("VAR","VAL")
-Get/set environment variables.
+.B Env.Get("VAR")
+Get environment variable.
+.TP
+.B Env.Set("VAR", "VAL")
+Set environment variable.
 .TP
 .B Env.Exit(code)
-Terminate the process with
-.IR code .
+Exit with status code.
+.SS Terminal I/O
 .TP
-.B TTY.ReadLine(prompt), TTY.Write(text), TTY.WriteLine(text)
-Interactive terminal I/O.
+.B TTY.ReadLine(prompt)
+Read line with prompt.
 .TP
-.B FS.Read(path), FS.Write(path,text), FS.Append(path,text)
-File operations on text.
+.B TTY.Write(text)
+Write without newline.
 .TP
-.B FS.Delete(path), FS.List(path), FS.Exists(path), FS.Glob(pattern)
-Filesystem helpers; FS.Glob is POSIX-only in MVP.
+.B TTY.WriteLine(text)
+Write with newline.
+.SS Filesystem Operations
+.TP
+.B FS.Read(path)
+Read file contents.
+.TP
+.B FS.Write(path, text)
+Write text to file.
+.TP
+.B FS.Append(path, text)
+Append to file.
+.TP
+.B FS.Delete(path)
+Delete file.
+.TP
+.B FS.List(path)
+List directory.
+.TP
+.B FS.Exists(path)
+Check if path exists (returns 1 or 0).
+.TP
+.B FS.Glob(pattern)
+Glob pattern (POSIX only).
+.TP
+.B FS.Cd(path)
+Change directory (returns 1 on success).
+.TP
+.B FS.Mkdir(path [, parents])
+Create directory.
+.TP
+.B FS.Rmdir(path)
+Remove empty directory.
+.TP
+.B FS.RemoveAll(path)
+Recursive delete.
+.TP
+.B FS.Copy(src, dst [, recursive])
+Copy file or directory.
+.TP
+.B FS.Move(src, dst)
+Move or rename.
+.TP
+.B FS.Touch(path)
+Create or update timestamp.
+.TP
+.B FS.Size(path)
+Get file size in bytes.
+.TP
+.B FS.IsDir(path)
+Check if directory.
+.TP
+.B FS.MTime(path)
+Get modification time (UNIX seconds).
+.SS Path Manipulation
+.TP
+.B Path.Join(a, b)
+Join path components.
+.TP
+.B Path.Dirname(path)
+Get parent directory.
+.TP
+.B Path.Basename(path)
+Get filename.
+.TP
+.B Path.Ext(path)
+Get extension.
+.SS Random Numbers
+.TP
+.B RNG.Seed([value])
+Seed RNG.
+.TP
+.B RNG.Int([max])
+Random integer [0, max].
+.TP
+.B RNG.Int(min, max)
+Random integer [min, max].
+.TP
+.B RNG.Float()
+Random float [0.0, 1.0).
+.TP
+.B Rand()
+Alias for RNG.Float().
+.SS Time
+.TP
+.B Time.Now()
+Current time as "YYYY-MM-DD HH:MM:SS".
+.SS Array Support
+.TP
+.B LEN(string)
+String length.
+.TP
+.B LEN("arrayname")
+Array length (pass name as string).
 .P
 The result of the last
 .B CALL
-is available in the special variable
+is stored in the special variable
 .BR _ .
 .SH MODS
-Mods are PrismBASIC files that register shell commands and autoload from search paths.
+Mods are PrismBASIC files that register shell commands. They autoload from:
+.IP \(bu 3
+.I ./mods
+(project-local)
+.IP \(bu 3
+.I ~/.config/prismshell/mods
+(user)
+.IP \(bu 3
+.I /usr/local/share/prismshell/mods
+(system)
+.IP \(bu 3
+Paths in
+.B PRISMSHELL_MOD_PATH
+(colon-separated)
+.P
+Control autostart behavior with
+.IR ~/.prismrc .
 See
 .BR prismshell-mods (7)
-for details, meta commands, and examples.
-.SH PROMPT
-The prompt is determined by:
+for details.
+.SH PROMPT CUSTOMIZATION
+The prompt is determined by (in order):
 .IP "1." 4
-A \fIprompt\fR mod, if present/enabled, whose output becomes the prompt.
+A
+.I prompt
+mod (if present and enabled).
 .IP "2." 4
 A template set via
-.BR CALL\ Prompt.SetTemplate ( ... ),
-with placeholders such as
-.BR \${status_emoji} ,
-.BR \${shortcwd} ,
-and
-.BR \${time} .
+.B Prompt.SetTemplate(...)
+with placeholders:
+.BR ${status_emoji} ,
+.BR ${shortcwd} ,
+.BR ${time} ,
+etc.
 .IP "3." 4
-A built-in default:
-.BR "\${status_emoji} \${shortcwd} pbsh> " .
+Built-in default:
+.BR "${status_emoji} ${shortcwd} pbsh> " .
+.P
 See
 .BR prismshell-prompt (7).
 .SH FILES
@@ -135,43 +313,86 @@ User mods directory.
 .TP
 .I /usr/local/share/prismshell/mods
 System mods directory.
+.TP
+.I ~/.prismrc
+User configuration file for autostart control.
 .SH ENVIRONMENT
 .TP
 .B PB_ARGV
-Script arguments (MVP: JSON-ish array string). In mods, the shell also populates
+Script arguments (JSON-like array string).
+.TP
 .B PB_CMD
-(the command name),
+Mod command name (when running as mod).
+.TP
 .B PB_ARGC
-(count),
-.B PB_ARG1..PB_ARGN
-(individual args), and
+Mod argument count.
+.TP
+.B PB_ARG1, PB_ARG2, ...
+Individual mod arguments.
+.TP
 .B PB_ARGS
-(space-joined).
+Space-joined mod arguments.
 .TP
 .B HOME
-Used to resolve the user mod directory.
+Used to resolve user directories.
+.TP
+.B PRISMRC
+Override path to rc file.
+.TP
+.B PRISMRC_HOME
+Override home directory for rc file resolution.
+.TP
+.B PRISMSHELL_MOD_PATH
+Additional colon-separated mod search paths.
 .SH EXIT STATUS
-The shell returns the exit status of the last command executed in direct mode.
+The shell returns the exit status of the last command executed.
 Program exit is controlled by
-.BR Env.Exit .
+.BR Env.Exit() .
 .SH EXAMPLES
+.SS Basic Usage
 .EX
+# Interactive session
+prismshell
+PRINT "Hello!"
+LET x = 42
+PRINT x
+
 # Run a program
-prismshell demo.bas
+prismshell demo.bas arg1 arg2
 
-# Interactive: BASIC and shell mixing
-PRINT "Hello"
-ls -l
+# Shebang script
+#!/usr/bin/env prismshell
+PRINT "Script with arguments"
+CALL Env.Args()
+PRINT _
+.EE
+.SS Arrays and Loops
+.EX
+DIM fib[20]
+LET fib[0] = 0
+LET fib[1] = 1
+LET i = 2
+WHILE i < 20
+  LET fib[i] = fib[i-1] + fib[i-2]
+  LET i = i + 1
+WEND
+.EE
+.SS User Subroutines
+.EX
+SUB Power(base, exp)
+  IF exp = 0 THEN
+    LET _ = 1
+  ELSE
+    CALL Power(base, exp - 1)
+    LET _ = base * _
+  ENDIF
+END SUB
 
-# Save & load
-10 PRINT "Hey!"
-SAVE hello.bas
-NEW
-LOAD hello.bas
-RUN
+CALL Power(2, 10)
+PRINT "2^10 = "; _
 .EE
 .SH SEE ALSO
 .BR sh (1),
-.BR prismshell-mods (7),
 .BR prismshell-language (7),
+.BR prismshell-mods (7),
 .BR prismshell-prompt (7)
