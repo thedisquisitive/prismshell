@@ -71,6 +71,166 @@ namespace {
 static Value num(double d)              { return Value{d}; }
 static Value str(std::string s)         { return Value{std::move(s)}; }
 
+/* ---------------- User SUB execution ---------------- */
+
+// Helper: Extract SUB definitions from program and move them to rt.subs
+void extract_subs(Runtime& rt) {
+  std::map<int, std::string> newProgram;  // Program without SUB blocks
+  
+  auto it = rt.program.begin();
+  while (it != rt.program.end()) {
+    int lineNum = it->first;
+    const std::string& line = it->second;
+    
+    // Check if line starts with SUB keyword
+    Lexer lx(line, lineNum);
+    auto tokens = lx.lex();
+    
+    if (!tokens.empty() && tokens[0].k == TokKind::Sub) {
+      // Found SUB definition - extract it
+      SubDefinition subDef;
+      subDef.entryLine = lineNum;
+      
+      // Parse: SUB name(param1, param2, ...)
+      if (tokens.size() >= 2 && tokens[1].k == TokKind::Id) {
+        std::string subName = tokens[1].text;
+        
+        // Extract parameters from (param1, param2, ...)
+        size_t i = 2;
+        if (i < tokens.size() && tokens[i].k == TokKind::LParen) {
+          i++;
+          while (i < tokens.size() && tokens[i].k != TokKind::RParen) {
+            if (tokens[i].k == TokKind::Id) {
+              std::string param = tokens[i].text;
+              // Strip [] suffix if present (e.g., args[])
+              size_t bracket = param.find('[');
+              if (bracket != std::string::npos) {
+                param = param.substr(0, bracket);
+              }
+              subDef.params.push_back(param);
+            }
+            i++;
+            // Skip comma
+            if (i < tokens.size() && tokens[i].k == TokKind::Comma) i++;
+          }
+        }
+        
+        // Collect SUB body until we find END SUB
+        ++it;  // Move past the SUB declaration line
+        int depth = 0;  // Track nesting depth for error detection
+        
+        while (it != rt.program.end()) {
+          int bodyLineNum = it->first;
+          const std::string& bodyLine = it->second;
+          
+          // Parse this line to check for END SUB or nested SUB
+          Lexer bodyLx(bodyLine, bodyLineNum);
+          auto bodyTokens = bodyLx.lex();
+          
+          // Check for nested SUB (error)
+          if (!bodyTokens.empty() && bodyTokens[0].k == TokKind::Sub) {
+            std::cerr << "Error at line " << bodyLineNum 
+                      << ": Nested SUB not supported\n";
+            depth++;
+          }
+          
+          // Check for END SUB (two tokens: END SUB)
+          bool isEndSub = false;
+          if (bodyTokens.size() >= 2) {
+            if (bodyTokens[0].k == TokKind::EndTok && 
+                bodyTokens[1].k == TokKind::Sub) {
+              isEndSub = true;
+            }
+          }
+          
+          // Also check for single-word ENDSUB identifier
+          if (!isEndSub && !bodyTokens.empty()) {
+            if (bodyTokens[0].k == TokKind::Id) {
+              std::string word = bodyTokens[0].text;
+              for (char& c : word) c = (char)std::toupper((unsigned char)c);
+              if (word == "ENDSUB") isEndSub = true;
+            }
+          }
+          
+          if (isEndSub) {
+            if (depth > 0) {
+              depth--;  // Closing a nested SUB
+            } else {
+              ++it;  // Skip the END SUB line
+              break;  // Done with this SUB
+            }
+          }
+          
+          // Add this line to the SUB body
+          subDef.body[bodyLineNum] = bodyLine;
+          ++it;
+        }
+        
+        // Warn if we never found END SUB
+        if (it == rt.program.end() && depth >= 0) {
+          std::cerr << "Warning: SUB " << subName 
+                    << " at line " << lineNum << " missing END SUB\n";
+        }
+        
+        // Check for duplicate SUB names
+        if (rt.subs.find(subName) != rt.subs.end()) {
+          std::cerr << "Warning: SUB " << subName 
+                    << " at line " << lineNum << " redefines earlier SUB\n";
+        }
+        
+        // Register the SUB
+        rt.subs[subName] = subDef;
+      } else {
+        // Malformed SUB line - skip it
+        std::cerr << "Error at line " << lineNum << ": Malformed SUB declaration\n";
+        ++it;
+      }
+      
+      continue;  // Don't add SUB definition lines to main program
+    }
+    
+    // Not a SUB line - keep in main program
+    newProgram[lineNum] = line;
+    ++it;
+  }
+  
+  // Replace program with version that has SUBs extracted
+  rt.program = newProgram;
+}
+
+Value call_user_sub(Runtime& rt, const SubDefinition& sub, const std::vector<Value>& args){
+  // Create a child runtime that inherits parent's context
+  Runtime childRt;
+  childRt.vars = rt.vars;        // inherit variables
+  childRt.arrays = rt.arrays;    // inherit arrays
+  childRt.subs = rt.subs;        // inherit SUB definitions
+  childRt.program = sub.body;    // use SUB's body as program
+  
+  // Bind parameters
+  for(size_t i = 0; i < sub.params.size(); ++i){
+    if(i < args.size()) {
+      childRt.vars[sub.params[i]] = args[i];
+    } else {
+      childRt.vars[sub.params[i]] = Value{};  // default to empty
+    }
+  }
+  
+  // Run the SUB from its entry line
+  auto res = childRt.run_program(sub.entryLine);
+  
+  if(res.err) {
+    std::cerr << "Error in SUB at line " << res.err->line << ": " << res.err->msg << "\n";
+    return Value{};
+  }
+  
+  // Return value: check _ variable or lastCall
+  auto it = childRt.vars.find("_");
+  if(it != childRt.vars.end()) {
+    return it->second;
+  }
+  return childRt.lastCall;
+}
+
 /* ---------------- Mod registry (in-memory) ---------------- */
 
 struct ModEntry {
@@ -150,9 +310,35 @@ Value Runtime::eval(const ExprPtr& e){
       return it == vars.end() ? Value{} : it->second;
     }
 
+    // NEW: Array indexing
+    case Expr::ArrIndex: {
+      auto it = arrays.find(e->arrName);
+      if(it == arrays.end()) return Value{};  // array doesn't exist
+      
+      Value idxVal = eval(e->index);
+      int idx = 0;
+      if(std::holds_alternative<Number>(idxVal)) {
+        idx = (int)std::get<Number>(idxVal);
+      } else {
+        std::string s = to_string(idxVal);
+        try { idx = std::stoi(s); } catch(...) { idx = 0; }
+      }
+      
+      if(idx < 0 || idx >= (int)it->second.size()) return Value{};  // out of bounds
+      return it->second[idx];
+    }
+
     case Expr::CallFn: {
       std::vector<Value> args; args.reserve(e->args.size());
       for(const auto& a : e->args) args.push_back(eval(a));
+      
+      // Check if it's a user SUB first
+      auto subIt = subs.find(e->name);
+      if(subIt != subs.end()) {
+        return call_user_sub(*this, subIt->second, args);
+      }
+      
+      // Otherwise dispatch to builtins
       return call_dispatch(*this, e->name, args);
     }
 
@@ -192,6 +378,7 @@ Value Runtime::eval(const ExprPtr& e){
   return {};
 }
 
+
 /* ---------------- Runtime: stmt exec ---------------- */
 
 Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
@@ -200,6 +387,56 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
 
   switch(s->kind){
     case Stmt::Rem: break;
+
+    // NEW: DIM statement
+    case Stmt::Dim: {
+      int size = 0;
+      if(s->dimSize) {
+        Value sizeVal = eval(s->dimSize);
+        if(std::holds_alternative<Number>(sizeVal)) {
+          size = (int)std::get<Number>(sizeVal);
+        } else {
+          std::string str = to_string(sizeVal);
+          try { size = std::stoi(str); } catch(...) { size = 0; }
+        }
+      }
+      // Create array with specified size (or empty if dynamic [])
+      if(size < 0) size = 0;
+      arrays[s->dimName] = std::vector<Value>(size);
+    } break;
+
+    // NEW: Array assignment
+    case Stmt::ArrAssign: {
+      auto it = arrays.find(s->arrName);
+      if(it == arrays.end()) {
+        // Auto-create array if it doesn't exist
+        arrays[s->arrName] = std::vector<Value>();
+        it = arrays.find(s->arrName);
+      }
+      
+      Value idxVal = eval(s->arrIndex);
+      int idx = 0;
+      if(std::holds_alternative<Number>(idxVal)) {
+        idx = (int)std::get<Number>(idxVal);
+      } else {
+        std::string str = to_string(idxVal);
+        try { idx = std::stoi(str); } catch(...) { idx = 0; }
+      }
+      
+      // Auto-expand array if needed
+      if(idx >= (int)it->second.size()) {
+        it->second.resize(idx + 1);
+      }
+      
+      if(idx >= 0) {
+        it->second[idx] = eval(s->arrValue);
+      }
+    } break;
+
+    // NEW: SubDef - should not appear during execution
+    case Stmt::SubDef: {
+      // No-op during execution; SUBs are registered before running
+    } break;
 
     case Stmt::Let: {
       vars[s->letName] = eval(s->letExpr);
@@ -324,7 +561,14 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
     case Stmt::Call: {
       std::vector<Value> args; args.reserve(s->callArgs.size());
       for(const auto& a : s->callArgs) args.push_back(eval(a));
-      lastCall = call_dispatch(*this, s->callName, args);
+      
+      // Check user SUBs first
+      auto subIt = subs.find(s->callName);
+      if(subIt != subs.end()) {
+        lastCall = call_user_sub(*this, subIt->second, args);
+      } else {
+        lastCall = call_dispatch(*this, s->callName, args);
+      }
       vars["_"] = lastCall;
     } break;
 
@@ -492,6 +736,8 @@ bool Runtime::load(const std::string& path){
     content = (nl == std::string::npos) ? std::string() : content.substr(nl+1);
   }
 
+  
+
   // Helpers
   auto is_all_digits = [](const std::string& s)->bool{
     if(s.empty()) return false;
@@ -556,7 +802,7 @@ bool Runtime::load(const std::string& path){
       n += 10;
     }
   }
-
+  extract_subs(*this);
   return true;
 }
 
@@ -598,13 +844,32 @@ static void rng_autoseed(Runtime& rt){
 }
 
 Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Value>& args){
-  std::string up = qname;
+std::string up = qname;
   for(char& c : up) c = (char)std::toupper((unsigned char)c);
 
   auto wantN = [&](size_t n){ return args.size() == n; };
   auto asS   = [&](size_t i){ return std::holds_alternative<std::string>(args[i]) ? std::get<std::string>(args[i]) : to_string(args[i]); };
   auto asD   = [&](size_t i){ return std::holds_alternative<Number>(args[i])     ? std::get<Number>(args[i])     : std::stod(to_string(args[i])); };
 
+  // NEW: LEN function - works on strings and arrays
+  if(up=="LEN" && wantN(1)){
+    const Value& v = args[0];
+    
+    // If it's a string value, return its length
+    if(std::holds_alternative<std::string>(v)) {
+      return num((double)std::get<std::string>(v).size());
+    }
+    
+    // If it's passed as a variable name (string), check if it's an array
+    std::string name = asS(0);
+    auto it = rt.arrays.find(name);
+    if(it != rt.arrays.end()) {
+      return num((double)it->second.size());
+    }
+    
+    // For numbers or unknown, return 0
+    return num(0.0);
+  }
   // ------- Env.*
   if(up=="ENV.CWD" && wantN(0)) return str(fs::current_path().string());
 
@@ -803,8 +1068,32 @@ Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Val
     return str(os.str());
   }
 
-  // Unknown -> empty
+  if(up=="ARR.SET" && wantN(3)){
+  std::string arrName = asS(0);
+  int idx = (int)asD(1);
+  Value val = args[2];
+  
+  auto it = rt.arrays.find(arrName);
+  if(it == rt.arrays.end()) {
+    // Create array if needed
+    rt.arrays[arrName] = std::vector<Value>();
+    it = rt.arrays.find(arrName);
+  }
+  
+  // Auto-expand if needed
+  if(idx >= (int)it->second.size()) {
+    it->second.resize(idx + 1);
+  }
+  
+  if(idx >= 0) {
+    it->second[idx] = val;
+  }
+  
   return Value{};
 }
+
+  // Unknown -> empty
+  return Value{};
+}  // ← This closes call_dispatch function
 
 } // namespace pb

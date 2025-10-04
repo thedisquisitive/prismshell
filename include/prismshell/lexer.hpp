@@ -14,6 +14,7 @@ Eq, Ne, Lt, Le, Gt, Ge, Caret,
 Let, Print, Input, If, Then, Else, EndTok, Rem,
 Goto, Gosub, ReturnTok,
 Call,
+Dim, Sub, LBracket, RBracket,
 };
 
 

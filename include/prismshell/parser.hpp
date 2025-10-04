@@ -16,7 +16,10 @@ using StmtPtr = std::shared_ptr<Stmt>;
 using ExprPtr = std::shared_ptr<Expr>;
 
 struct Expr {
-  enum Kind { Num, Str, Var, Bin, CallFn } kind;
+  enum Kind { 
+    Num, Str, Var, Bin, CallFn,
+    ArrIndex   // NEW: array[index] access
+  } kind;
   int line{0};
 
   // literals
@@ -25,6 +28,10 @@ struct Expr {
   // identifiers / calls
   std::string name;          // for Var or CallFn
   std::vector<ExprPtr> args; // for CallFn
+
+  // NEW: for ArrIndex
+  std::string arrName;
+  ExprPtr index;
 
   // binary arithmetic
   char op{0};                // + - * /
@@ -42,7 +49,11 @@ struct Stmt {
     IfThenBlk,   // "IF <expr> THEN" (EOL) — block header
     ElseIfThen,  // "ELSEIF <expr> THEN"
     ElseBlk,     // "ELSE"
-    EndIf        // "ENDIF"   (use single-word ENDIF for simplicity)
+    EndIf,       // "ENDIF"
+    // NEW Phase 1:
+    Dim,         // DIM name[size] or DIM name[]
+    ArrAssign,   // name[index] = expr
+    SubDef       // SUB definition (parsed separately)
   } kind{};
   int line{0};
 
@@ -63,11 +74,24 @@ struct Stmt {
 
   // GOTO/GOSUB targets
   int targetLine{-1};
+
+  // NEW: DIM
+  std::string dimName;
+  ExprPtr dimSize;  // nullptr means dynamic []
+
+  // NEW: ArrAssign
+  std::string arrName;
+  ExprPtr arrIndex;
+  ExprPtr arrValue;
+
+  // NEW: SubDef
+  std::string subName;
+  std::vector<std::string> subParams;
 };
 
 struct ParseOut {
   std::vector<StmtPtr> stmts;
-  std::optional<Error> err;
+  std::optional<Error> err;  // FIXED: Was "e", now "Error"
 };
 
 struct Parser {
@@ -101,6 +125,5 @@ static bool first_token_is_id_kw(const std::string& src, int line, const char* k
   for(char& c : u) c = (char)std::toupper((unsigned char)c);
   return u == kw;
 }
-
 
 } // namespace pb

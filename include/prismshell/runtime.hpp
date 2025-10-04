@@ -9,11 +9,21 @@
 #include "prismshell/parser.hpp"  // ExprPtr, StmtPtr
 
 namespace pb {
+// NEW: User-defined SUB structure
+struct SubDefinition {
+  std::vector<std::string> params;
+  std::map<int, std::string> body;  // line-numbered body
+  int entryLine;
+};
 
 struct Runtime {
   std::map<std::string, Value> vars;   // variables (incl. PB_ARGV)
   std::map<int, std::string> program;  // line-numbered source
   Value lastCall;                       // `_`
+
+  // NEW Phase 1: Arrays and SUBs
+  std::map<std::string, std::vector<Value>> arrays;  // arrays
+  std::map<std::string, SubDefinition> subs;         // user SUBs
 
   // Execution
   Result run_line_direct(const std::string& line, int lineNo=0);
@@ -40,10 +50,11 @@ struct Runtime {
 // Builtin CALL router
 Value call_dispatch(Runtime& rt, const std::string& qname, const std::vector<Value>& args);
 
+// NEW: User SUB execution
+Value call_user_sub(Runtime& rt, const SubDefinition& sub, const std::vector<Value>& args);
+
 // (Optional) Mod registry API — useful if other translation units need it
 bool mod_has(const std::string& name);
 int  mod_run(const std::string& name, const std::vector<std::string>& args, Runtime& parent);
-
-
-
+void extract_subs(Runtime& rt);
 } // namespace pb

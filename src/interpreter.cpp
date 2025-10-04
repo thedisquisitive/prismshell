@@ -658,7 +658,7 @@ for (const auto& m : toRun) {
         n += 10;
       }
     }
-
+    extract_subs(rt);
     auto r = rt.run_program();
     if(r.err){
       std::cerr << "Error at " << r.err->line << ": " << r.err->msg << "\n";

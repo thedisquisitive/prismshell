@@ -52,10 +52,26 @@ ExprPtr Parser::parseFactor() {
     pop(); return s;
   }
   if (t.k == TokKind::Id) {
-    std::string name = t.text; pop();
+    std::string name = t.text;
+    int savedLine = t.line;
+    pop();
+    
+    // Check for array indexing: name[expr]
+    if (match(TokKind::LBracket)) {
+      auto idx = parseExpr();
+      match(TokKind::RBracket);  // consume closing bracket
+      auto arr = std::make_shared<Expr>();
+      arr->kind = Expr::ArrIndex;
+      arr->line = savedLine;
+      arr->arrName = name;
+      arr->index = idx;
+      return arr;
+    }
+    
+    // Check for function call: name(args)
     if (match(TokKind::LParen)) {
       auto call = std::make_shared<Expr>();
-      call->kind = Expr::CallFn; call->name = name; call->line = t.line;
+      call->kind = Expr::CallFn; call->name = name; call->line = savedLine;
       if (!match(TokKind::RParen)) {
         while (true) {
           auto e = parseExpr();
@@ -67,8 +83,10 @@ ExprPtr Parser::parseFactor() {
       }
       return call;
     }
+    
+    // Plain variable
     auto v = std::make_shared<Expr>();
-    v->kind = Expr::Var; v->line = t.line; v->name = name;
+    v->kind = Expr::Var; v->line = savedLine; v->name = name;
     return v;
   }
   if (match(TokKind::LParen)) {
@@ -138,18 +156,39 @@ ExprPtr Parser::parseExpr() {
 }
 
 /* ------------------- statement parsing ------------------- */
+
 StmtPtr Parser::parseStmt() {
   if (eof()) return nullptr;
   const Token& t = peek();
 
   // REM should consume the rest of the line
   if (t.k == TokKind::Rem) {
-    // eat 'REM'
     pop();
-    // consume to End token so the parser doesn't see leftovers
     while (!eof() && peek().k != TokKind::End) pop();
     auto s = std::make_shared<Stmt>();
     s->kind = Stmt::Rem; s->line = t.line;
+    return s;
+  }
+
+  // NEW: DIM name[size] or DIM name[]
+  if (t.k == TokKind::Dim) {
+    pop();  // consume DIM
+    if (peek().k != TokKind::Id) return nullptr;
+    std::string name = pop().text;
+    if (!match(TokKind::LBracket)) return nullptr;
+    
+    ExprPtr size = nullptr;
+    if (peek().k != TokKind::RBracket) {
+      size = parseExpr();  // parse size expression
+    }
+    
+    if (!match(TokKind::RBracket)) return nullptr;
+    
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::Dim;
+    s->line = t.line;
+    s->dimName = name;
+    s->dimSize = size;  // nullptr means dynamic []
     return s;
   }
 
@@ -157,25 +196,44 @@ StmtPtr Parser::parseStmt() {
   if (!eof() && peek().k == TokKind::Id) {
     std::string u = up(peek().text);
     if (u == "WHILE") {
-      pop();                                  // consume WHILE
-      auto cond = parseExpr();                // parse condition to end-of-line
+      pop();
+      auto cond = parseExpr();
       auto s = std::make_shared<Stmt>();
       s->kind = Stmt::While; s->line = t.line; s->ifCond = cond;
       return s;
     }
     if (u == "WEND") {
-      pop();                                  // consume WEND
+      pop();
       auto s = std::make_shared<Stmt>();
       s->kind = Stmt::Wend; s->line = t.line;
       return s;
     }
   }
 
-
+  // LET or array assignment detection
   if (t.k == TokKind::Let) {
     pop();
     if (peek().k != TokKind::Id) return nullptr;
     std::string name = pop().text;
+    
+    // Check for array assignment: LET name[index] = expr
+    if (peek().k == TokKind::LBracket) {
+      pop();  // consume [
+      auto idx = parseExpr();
+      if (!match(TokKind::RBracket)) return nullptr;
+      if (!match(TokKind::Eq)) return nullptr;
+      auto val = parseExpr();
+      
+      auto s = std::make_shared<Stmt>();
+      s->kind = Stmt::ArrAssign;
+      s->line = t.line;
+      s->arrName = name;
+      s->arrIndex = idx;
+      s->arrValue = val;
+      return s;
+    }
+    
+    // Regular LET
     if (!match(TokKind::Eq)) return nullptr;
     auto e = parseExpr();
     auto s = std::make_shared<Stmt>();
@@ -184,67 +242,51 @@ StmtPtr Parser::parseStmt() {
   }
 
   if (t.k==TokKind::Print){
-  pop();
-
-  bool newline = true;
-
-  // allow bare PRINT -> prints a blank line
-  ExprPtr e = parseExpr();
-  if(!e){
-    auto z = std::make_shared<Expr>();
-    z->kind = Expr::Str;
-    z->line = t.line;
-    z->val  = std::string("");
-    e = z;
-  }
-
-  // Accept multiple items separated by ';' or ','
-  // - We concatenate items with '+' internally.
-  // - A trailing ';' (with no following expr) suppresses newline.
-  while(!eof()){
-    if(peek().k == TokKind::Comma || peek().k == TokKind::Semi){
-      bool isSemi = (peek().k == TokKind::Semi);
-      pop();
-
-      // Trailing ';' => no newline; nothing more to print
-      if(peek().k == TokKind::End){
-        if(isSemi) newline = false;
-        break;
-      }
-
-      // Parse next item and fold into a '+' chain
-      auto rhs = parseExpr();
-      if(!rhs){
-        auto z = std::make_shared<Expr>();
-        z->kind = Expr::Str;
-        z->line = t.line;
-        z->val  = std::string("");
-        rhs = z;
-      }
-
-      auto b = std::make_shared<Expr>();
-      b->kind  = Expr::Bin;
-      b->op    = '+';
-      b->left  = e;
-      b->right = rhs;
-      e = b;
-
-      // If a semicolon was used between items, also suppress newline (classic vibe).
-      //if(isSemi) newline = false;
-      continue;
+    pop();
+    bool newline = true;
+    ExprPtr e = parseExpr();
+    if(!e){
+      auto z = std::make_shared<Expr>();
+      z->kind = Expr::Str;
+      z->line = t.line;
+      z->val  = std::string("");
+      e = z;
     }
-    break;
+
+    while(!eof()){
+      if(peek().k == TokKind::Comma || peek().k == TokKind::Semi){
+        bool isSemi = (peek().k == TokKind::Semi);
+        pop();
+        if(peek().k == TokKind::End){
+          if(isSemi) newline = false;
+          break;
+        }
+        auto rhs = parseExpr();
+        if(!rhs){
+          auto z = std::make_shared<Expr>();
+          z->kind = Expr::Str;
+          z->line = t.line;
+          z->val  = std::string("");
+          rhs = z;
+        }
+        auto b = std::make_shared<Expr>();
+        b->kind  = Expr::Bin;
+        b->op    = '+';
+        b->left  = e;
+        b->right = rhs;
+        e = b;
+        continue;
+      }
+      break;
+    }
+
+    auto s = std::make_shared<Stmt>();
+    s->kind         = Stmt::Print;
+    s->line         = t.line;
+    s->printExpr    = e;
+    s->printNewline = newline;
+    return s;
   }
-
-  auto s = std::make_shared<Stmt>();
-  s->kind         = Stmt::Print;
-  s->line         = t.line;
-  s->printExpr    = e;
-  s->printNewline = newline;
-  return s;
-}
-
-
 
   if (t.k == TokKind::Input) {
     pop();
@@ -256,7 +298,7 @@ StmtPtr Parser::parseStmt() {
   }
 
   if (t.k == TokKind::If) {
-    auto t_if = pop();                 // consume IF
+    auto t_if = pop();
     auto cond = parseExpr();
     if (!match(TokKind::Then)) return nullptr;
 
@@ -267,8 +309,8 @@ StmtPtr Parser::parseStmt() {
       return s;
     }
 
-    // SINGLE-LINE IF ... THEN <line> (existing behavior preserved)
-    if (peek().k == TokKind::Goto) pop();     // optional GOTO
+    // SINGLE-LINE IF ... THEN <line>
+    if (peek().k == TokKind::Goto) pop();
     if (peek().k == TokKind::Num) {
       int tgt = std::stoi(pop().text);
       auto s = std::make_shared<Stmt>();
@@ -278,18 +320,18 @@ StmtPtr Parser::parseStmt() {
     return nullptr;
   }
 
-  // ELSEIF <expr> THEN   (accepts identifier "ELSEIF")
+  // ELSEIF <expr> THEN
   if (!eof() && peek().k == TokKind::Id && up(peek().text) == "ELSEIF") {
     auto t_ei = pop();
     auto cond = parseExpr();
     if (!match(TokKind::Then)) return nullptr;
-    if (peek().k != TokKind::End) return nullptr; // must end line
+    if (peek().k != TokKind::End) return nullptr;
     auto s = std::make_shared<Stmt>();
     s->kind = Stmt::ElseIfThen; s->line = t_ei.line; s->ifCond = cond;
     return s;
   }
 
-  // ELSE   (token Else from lexer)
+  // ELSE
   if (!eof() && peek().k == TokKind::Else) {
     auto t_else = pop();
     auto s = std::make_shared<Stmt>();
@@ -297,14 +339,13 @@ StmtPtr Parser::parseStmt() {
     return s;
   }
 
-  // ENDIF   (accept single-word identifier "ENDIF" for simplicity)
+  // ENDIF
   if (!eof() && peek().k == TokKind::Id && up(peek().text) == "ENDIF") {
     auto t_endif = pop();
     auto s = std::make_shared<Stmt>();
     s->kind = Stmt::EndIf; s->line = t_endif.line;
     return s;
   }
-
 
   if (t.k == TokKind::Goto) {
     pop();

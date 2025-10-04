@@ -85,6 +85,8 @@ std::vector<Token> Lexer::lex(){
       else if(up=="GOSUB")  push(TokKind::Gosub);
       else if(up=="RETURN") push(TokKind::ReturnTok);
       else if(up=="CALL")   push(TokKind::Call);
+      else if(up=="DIM")    push(TokKind::Dim);
+      else if(up=="SUB")    push(TokKind::Sub);
       else                  push(TokKind::Id, id);
       continue;
     }
@@ -111,6 +113,8 @@ std::vector<Token> Lexer::lex(){
         if(pos<(int)src.size() && src[pos]=='='){ ++pos; push(TokKind::Ge); }
         else push(TokKind::Gt);
         break;
+      case '[': push(TokKind::LBracket); break;
+      case ']': push(TokKind::RBracket); break;
       default:
         // ignore unknowns
         break;
