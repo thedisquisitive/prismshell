@@ -192,33 +192,42 @@ END
 
 ' ===== SUB Definitions =====
 
-100 SUB Double(x)
-110   LET _ = x * 2
-120 END SUB
+SUB Double(x)
+  LET _ = x * 2
+END SUB
 
-200 SUB Add(a, b)
-210   LET _ = a + b
-220 END SUB
+SUB Add(a, b)
+  LET _ = a + b
+END SUB
 
-300 SUB Multiply(x, y)
-310   LET _ = x * y
-320 END SUB
+SUB Multiply(x, y)
+  LET _ = x * y
+END SUB
 
-400 SUB Factorial(n)
-410   IF n <= 1 THEN 440
-420   CALL Factorial(n - 1)
-430   LET _ = n * _
-440   IF n <= 1 THEN 460
-450   GOTO 470
-460   LET _ = 1
-470 END SUB
+SUB Factorial(n)
+  PRINT "Factorial called with n="; n
+  IF n <= 1 THEN
+    PRINT "  Base case"
+    LET _ = 1
+  ELSE
+    PRINT "  Recursive case"
+    CALL Factorial(n - 1)
+    LET temp = _
+    PRINT "  Recursive result: "; temp
+    LET _ = n * temp
+  ENDIF
+  LET final = _
+  PRINT "  Returning: "; final
+END SUB
 
-500 SUB Helper(val)
-510   LET _ = val * 3
-520 END SUB
+SUB Helper(val)
+  LET _ = val * 3
+END SUB
 
-600 SUB ProcessValue(num)
-610   CALL Helper(num)
-620   LET temp = _
-630   LET _ = temp + 10
-640 END SUB
+SUB ProcessValue(num)
+  CALL Helper(num)
+  LET temp = _
+  LET _ = temp + 10
+END SUB
+
+' End of Test Suite

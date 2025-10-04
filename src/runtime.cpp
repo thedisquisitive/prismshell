@@ -34,13 +34,36 @@ namespace pb {
 
   // Take the first token as uppercase string (or "")
   static inline std::string first_kw(const std::string& src, int line){
-    Lexer lx(src, line);
-    auto ts = lx.lex();
-    if(ts.empty()) return "";
-    std::string u = ts[0].text;
-    for(char& c: u) c = (char)std::toupper((unsigned char)c);
-    return u; // works for Ids and keywords with text
-  }
+      Lexer lx(src, line);
+      auto ts = lx.lex();
+      if(ts.empty()) return "";
+      
+      // Handle keywords by their TokKind
+      switch(ts[0].k) {
+        case TokKind::Print:     return "PRINT";
+        case TokKind::Let:       return "LET";
+        case TokKind::Input:     return "INPUT";
+        case TokKind::If:        return "IF";
+        case TokKind::Then:      return "THEN";
+        case TokKind::Else:      return "ELSE";
+        case TokKind::EndTok:    return "END";
+        case TokKind::Goto:      return "GOTO";
+        case TokKind::Gosub:     return "GOSUB";
+        case TokKind::ReturnTok: return "RETURN";
+        case TokKind::Call:      return "CALL";
+        case TokKind::Dim:       return "DIM";
+        case TokKind::Sub:       return "SUB";
+        case TokKind::Rem:       return "REM";
+        default:
+          // For identifiers (like WHILE, WEND, ENDIF, ELSEIF), use text
+          if(ts[0].k == TokKind::Id) {
+            std::string u = ts[0].text;
+            for(char& c: u) c = (char)std::toupper((unsigned char)c);
+            return u;
+          }
+          return "";
+      }
+    }
 
   // Return the next line number after 'line' (or max if end)
   static inline int next_line_after(const std::map<int,std::string>& program, int line){
@@ -156,7 +179,7 @@ void extract_subs(Runtime& rt) {
             if (depth > 0) {
               depth--;  // Closing a nested SUB
             } else {
-              ++it;  // Skip the END SUB line
+              
               break;  // Done with this SUB
             }
           }
@@ -167,7 +190,7 @@ void extract_subs(Runtime& rt) {
         }
         
         // Warn if we never found END SUB
-        if (it == rt.program.end() && depth >= 0) {
+        if (it == rt.program.end() && !subDef.body.empty()) {
           std::cerr << "Warning: SUB " << subName 
                     << " at line " << lineNum << " missing END SUB\n";
         }
@@ -305,9 +328,11 @@ Value Runtime::eval(const ExprPtr& e){
     case Expr::Str: return e->val;
 
     case Expr::Var: {
-      if(e->name == "_") return lastCall;
+      // Check vars first (including _), then fall back to lastCall only if _ not in vars
       auto it = vars.find(e->name);
-      return it == vars.end() ? Value{} : it->second;
+      if(it != vars.end()) return it->second;
+      if(e->name == "_") return lastCall;
+      return Value{};
     }
 
     // NEW: Array indexing
@@ -460,48 +485,48 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
 
     // IF ... THEN   (block header)
     case Stmt::IfThenBlk: {
-      // If condition is FALSE: jump to first satisfied ELSEIF, or ELSE, or after ENDIF
-      if(!truthy(eval(s->ifCond))){
-        int cur = s->line;
-        int depth = 0;
-        int jump = std::numeric_limits<int>::max();
+  // If condition is FALSE: jump to first satisfied ELSEIF, or ELSE, or after ENDIF
+  if(!truthy(eval(s->ifCond))){
+    int cur = s->line;
+    int depth = 0;
+    int jump = std::numeric_limits<int>::max();
 
-        for(auto it = program.upper_bound(cur); it != program.end(); ++it){
-          int ln = it->first;
-          std::string kw = first_kw(it->second, ln);
+    for(auto it = program.upper_bound(cur); it != program.end(); ++it){
+      int ln = it->first;
+      std::string kw = first_kw(it->second, ln);
 
-          if(kw == "IF"){ ++depth; continue; }      // nested IF
-          if(kw == "ENDIF"){
-            if(depth == 0){ jump = next_line_after(program, ln); break; }
-            --depth; continue;
-          }
+      if(kw == "IF"){ ++depth; continue; }
+      if(kw == "ENDIF"){
+        if(depth == 0){ jump = next_line_after(program, ln); break; }
+        --depth; continue;
+      }
 
-          if(depth > 0) continue;                   // still inside nested IF, ignore
+      if(depth > 0) continue;
 
-          if(kw == "ELSEIF"){
-            // Evaluate this ELSEIF's condition: lex/parse just this line
-            Lexer lx(it->second, ln);
-            Parser p(lx.lex());
-            auto po = p.parse();
-            if(!po.err && !po.stmts.empty()){
-              auto he = po.stmts.front(); // ElseIfThen
-              if(truthy(eval(he->ifCond))){
-                jump = next_line_after(program, ln); // start executing body lines
-                break;
-              } else {
-                continue; // check next branch
-              }
-            }
-          }
-          if(kw == "ELSE"){
-            jump = next_line_after(program, ln);
+      if(kw == "ELSEIF"){
+        // Evaluate this ELSEIF's condition: lex/parse just this line
+        Lexer lx(it->second, ln);
+        Parser p(lx.lex());
+        auto po = p.parse();
+        if(!po.err && !po.stmts.empty()){
+          auto he = po.stmts.front(); // ElseIfThen
+          if(truthy(eval(he->ifCond))){
+            jump = next_line_after(program, ln); // start executing body lines
             break;
+          } else {
+            continue; // check next branch
           }
         }
-
-        *pc = jump;  // skip the whole IF block if no branch hit
       }
-    } break;
+      if(kw == "ELSE"){
+        jump = next_line_after(program, ln);
+        break;
+      }
+    }
+
+    *pc = jump;
+  }
+} break;
 
     // ELSEIF ... THEN   (if we *fall through* here, a previous branch already ran → skip to ENDIF)
     case Stmt::ElseIfThen: {
