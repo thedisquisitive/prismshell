@@ -301,6 +301,99 @@ PRINT "  Total iterations: "; total; " (should be 6)"
 PRINT "  PASS"
 PRINT ""
 
+' Test 26: 2D Arrays
+PRINT "Test 26: 2D Arrays"
+DIM matrix[3, 4]
+LET matrix[1, 2] = 42
+LET matrix[2, 3] = 99
+PRINT "  matrix[1, 2] = "; matrix[1, 2]
+PRINT "  matrix[2, 3] = "; matrix[2, 3]
+CALL ARR.DIMS("matrix")
+PRINT "  Dimensions: "; _
+PRINT "  PASS"
+
+' Test 27: Dynamic 2D Array
+PRINT "Test 27: Dynamic 2D Array"
+DIM grid[, ]
+LET grid[5, 10] = 1000
+PRINT "  grid[5, 10] = "; grid[5, 10]
+CALL ARR.SIZE("grid", 0)
+PRINT "  Rows: "; _
+CALL ARR.SIZE("grid", 1)
+PRINT "  Cols: "; _
+PRINT "  PASS"
+
+' Test 28: 3D Array
+PRINT "Test 28: 3D Array"
+DIM cube[2, 3, 4]
+LET cube[1, 2, 3] = 777
+PRINT "  cube[1, 2, 3] = "; cube[1, 2, 3]
+PRINT "  PASS"
+
+' ===== Test 29: Matrix Operations =====
+PRINT "Test 29: Matrix Operations"
+DIM mat[3, 3]
+LET sum = 0
+FOR row = 0 TO 2
+  FOR col = 0 TO 2
+    LET mat[row, col] = row * 3 + col + 1
+    LET sum = sum + mat[row, col]
+  NEXT col
+NEXT row
+PRINT "  mat[0, 0] = "; mat[0, 0]; " (should be 1)"
+PRINT "  mat[1, 1] = "; mat[1, 1]; " (should be 5)"
+PRINT "  mat[2, 2] = "; mat[2, 2]; " (should be 9)"
+PRINT "  Sum of all elements: "; sum; " (should be 45)"
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 30: Mixed Dimension Arithmetic =====
+PRINT "Test 30: Mixed Dimension Arithmetic"
+DIM vec[5]
+DIM matrix2[3, 4]
+LET vec[0] = 10
+LET vec[1] = 20
+LET matrix2[1, 2] = vec[0] + vec[1]
+PRINT "  vec[0] + vec[1] = "; matrix2[1, 2]; " (should be 30)"
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 31: 3D Array Population =====
+PRINT "Test 31: 3D Array Population"
+DIM cube3d[2, 2, 2]
+LET total = 0
+FOR x = 0 TO 1
+  FOR y = 0 TO 1
+    FOR z = 0 TO 1
+      LET val = x * 4 + y * 2 + z
+      LET cube3d[x, y, z] = val
+      LET total = total + val
+    NEXT z
+  NEXT y
+NEXT x
+PRINT "  cube3d[0, 0, 0] = "; cube3d[0, 0, 0]
+PRINT "  cube3d[1, 1, 1] = "; cube3d[1, 1, 1]
+PRINT "  Total: "; total; " (should be 28)"
+CALL ARR.DIMS("cube3d")
+PRINT "  Dimensions: "; _; " (should be 3)"
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 32: Dynamic Multi-Dim Expansion =====
+PRINT "Test 32: Dynamic Multi-Dim Expansion"
+DIM sparse[, , ]
+LET sparse[0, 0, 0] = 1
+LET sparse[10, 5, 3] = 999
+CALL ARR.SIZE("sparse", 0)
+PRINT "  Dim 0 size: "; _; " (should be 11)"
+CALL ARR.SIZE("sparse", 1)
+PRINT "  Dim 1 size: "; _; " (should be 6)"
+CALL ARR.SIZE("sparse", 2)
+PRINT "  Dim 2 size: "; _; " (should be 4)"
+PRINT "  sparse[10, 5, 3] = "; sparse[10, 5, 3]
+PRINT "  PASS"
+PRINT ""
+
 PRINT "========================================="
 PRINT "All Tests Complete!"
 PRINT "========================================="

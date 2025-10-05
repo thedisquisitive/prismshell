@@ -13,16 +13,18 @@ arguments are exposed to the program via
 .SH DESCRIPTION
 .B prismshell
 is a retro BASIC shell featuring a line-numbered editor, direct execution mode,
-arrays, user-defined subroutines, and block control flow.
+arrays (including multidimensional), user-defined subroutines, block control flow,
+FOR/NEXT loops, and DATA/READ/RESTORE.
 Lines that do not parse as BASIC are executed by
 .BR /bin/sh (1)
 using
 .B /bin/sh \-lc
 for seamless integration with Unix tools.
 .P
-The current implementation includes Phase 1 features: arrays with dynamic sizing,
-user-defined SUBs with parameters and recursion, block IF/ELSEIF/ELSE/ENDIF,
-and WHILE/WEND loops.
+The current implementation includes Phase 1 and Phase 2 features: arrays with dynamic sizing
+(1D and multidimensional), user-defined SUBs with parameters and recursion,
+block IF/ELSEIF/ELSE/ENDIF, WHILE/WEND loops, FOR/NEXT loops with STEP,
+and DATA/READ/RESTORE for embedded program data.
 .P
 Shebang scripts are supported; begin files with:
 .P
@@ -93,11 +95,22 @@ Declare arrays with
 using fixed or dynamic sizing:
 .P
 .EX
+' 1D arrays
 DIM numbers[10]        ' Fixed size
 LET numbers[0] = 42
 
 DIM data[]             ' Dynamic (auto-expands)
 LET data[100] = 999
+
+' Multidimensional arrays
+DIM matrix[3, 4]       ' 2D array (3×4)
+LET matrix[1, 2] = 42
+
+DIM grid[, ]           ' Dynamic 2D
+LET grid[100, 200] = 999
+
+DIM cube[2, 3, 4]      ' 3D array
+LET cube[1, 2, 3] = 777
 .EE
 .SS Block Control Flow
 .P
@@ -114,6 +127,43 @@ WHILE i < 10
   PRINT i
   LET i = i + 1
 WEND
+.EE
+.SS FOR/NEXT Loops
+Classic counted loops with optional step:
+.P
+.EX
+FOR i = 1 TO 10
+  PRINT i
+NEXT i
+
+FOR i = 10 TO 1 STEP -1
+  PRINT "Countdown: "; i
+NEXT i
+
+' With arrays
+DIM squares[10]
+FOR i = 0 TO 9
+  LET squares[i] = i * i
+NEXT i
+.EE
+.SS DATA/READ/RESTORE
+Embed and access data within programs:
+.P
+.EX
+DATA 100, 200, 300
+DATA "Alice", "Bob"
+
+READ x, y, z
+READ name1, name2
+
+RESTORE          ' Reset to start
+READ first       ' Re-read 100
+
+' Read into arrays
+DIM values[3]
+FOR i = 0 TO 2
+  READ values[i]
+NEXT i
 .EE
 .SS User Subroutines
 Define reusable procedures with
@@ -256,7 +306,16 @@ Current time as "YYYY-MM-DD HH:MM:SS".
 String length.
 .TP
 .B LEN("arrayname")
-Array length (pass name as string).
+Array length (first dimension, pass name as string).
+.TP
+.B ARR.DIMS("arrayname")
+Get number of dimensions.
+.TP
+.B ARR.SIZE("arrayname", dim)
+Get size of specific dimension (0-indexed).
+.TP
+.B ARR.SET(name, index, value)
+Set 1D array element.
 .P
 The result of the last
 .B CALL
@@ -368,14 +427,34 @@ PRINT _
 .EE
 .SS Arrays and Loops
 .EX
+' 1D array with FOR loop
 DIM fib[20]
 LET fib[0] = 0
 LET fib[1] = 1
-LET i = 2
-WHILE i < 20
+FOR i = 2 TO 19
   LET fib[i] = fib[i-1] + fib[i-2]
-  LET i = i + 1
-WEND
+NEXT i
+
+' 2D matrix
+DIM matrix[3, 3]
+FOR row = 0 TO 2
+  FOR col = 0 TO 2
+    LET matrix[row, col] = row * 3 + col
+  NEXT col
+NEXT row
+.EE
+.SS DATA/READ with Arrays
+.EX
+DATA 10, 20, 30, 40, 50
+
+DIM values[5]
+FOR i = 0 TO 4
+  READ values[i]
+NEXT i
+
+FOR i = 0 TO 4
+  PRINT "values["; i; "] = "; values[i]
+NEXT i
 .EE
 .SS User Subroutines
 .EX

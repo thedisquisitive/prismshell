@@ -58,6 +58,71 @@ CALL LEN("data")
 PRINT "Array size: "; _
 ```
 
+## Multidimensional Arrays
+
+Work with matrices, grids, and higher-dimensional data:
+
+```basic
+' 2D matrix (3 rows × 4 columns)
+DIM matrix[3, 4]
+LET matrix[0, 0] = 1
+LET matrix[2, 3] = 99
+PRINT matrix[2, 3]
+
+' Dynamic 2D array (auto-expands)
+DIM grid[, ]
+LET grid[100, 200] = 42
+CALL ARR.SIZE("grid", 0)
+PRINT "Rows: "; _  ' 101
+CALL ARR.SIZE("grid", 1)
+PRINT "Cols: "; _  ' 201
+
+' 3D array
+DIM cube[10, 10, 10]
+LET cube[5, 5, 5] = 100
+PRINT cube[5, 5, 5]
+
+' Mixed: fixed first dimension, dynamic second
+DIM hybrid[10, ]
+LET hybrid[0, 1000] = 777  ' Row 0, col 1000
+
+' Query dimensions
+CALL ARR.DIMS("matrix")
+PRINT "Dimensions: "; _  ' 2
+
+CALL ARR.SIZE("matrix", 0)
+PRINT "Rows: "; _  ' 3
+
+CALL ARR.SIZE("matrix", 1)
+PRINT "Cols: "; _  ' 4
+
+' Matrix operations with FOR loops
+DIM result[3, 3]
+FOR row = 0 TO 2
+  FOR col = 0 TO 2
+    LET result[row, col] = row * 3 + col + 1
+  NEXT col
+NEXT row
+
+' Using DATA/READ with matrices
+DATA 1, 2, 3
+DATA 4, 5, 6
+DIM mat[2, 3]
+FOR i = 0 TO 1
+  FOR j = 0 TO 2
+    READ mat[i, j]
+  NEXT j
+NEXT i
+```
+
+Key points:
+- Arrays use row-major order (last index varies fastest)
+- Zero-indexed like all PrismBASIC arrays
+- Can mix fixed and dynamic dimensions
+- Use comma-separated indices: `arr[i, j, k]`
+- Query dimensions with ARR.DIMS() and ARR.SIZE()
+- Compatible with FOR loops and DATA/READ
+
 ## Block Control Flow
 
 ### IF/ELSEIF/ELSE/ENDIF
@@ -84,6 +149,91 @@ WHILE i <= 5
   LET i = i + 1
 WEND
 ```
+
+## FOR/NEXT Loops
+
+Traditional BASIC loop structure with optional STEP:
+
+```basic
+' Count upward
+FOR i = 1 TO 10
+  PRINT i
+NEXT i
+
+' With step
+FOR i = 0 TO 100 STEP 5
+  PRINT i
+NEXT i
+
+' Countdown (negative step)
+FOR i = 10 TO 1 STEP -1
+  PRINT "T-minus "; i
+NEXT i
+
+' Nested loops
+FOR row = 0 TO 2
+  FOR col = 0 TO 2
+    PRINT "Position ["; row; ", "; col; "]"
+  NEXT col
+NEXT row
+
+' Use with arrays
+DIM squares[10]
+FOR i = 0 TO 9
+  LET squares[i] = i * i
+NEXT i
+```
+
+Key points:
+- Variable name after NEXT is optional but recommended for clarity
+- STEP defaults to 1 if omitted
+- Negative STEP allows countdown
+- Loop executes if start/end relationship matches step direction
+- Nested loops work as expected
+
+## DATA/READ/RESTORE
+
+Embed data directly in your programs:
+
+```basic
+' Define data (numbers and strings)
+DATA 10, 20, 30
+DATA "Alice", "Bob", "Charlie"
+DATA 3.14, 2.71, 1.41
+
+' Read sequentially
+READ x, y, z
+PRINT x, y, z  ' 10, 20, 30
+
+READ name1, name2, name3
+PRINT name1, name2, name3
+
+' Reset to beginning
+RESTORE
+READ first
+PRINT first  ' 10 (re-read)
+
+' Read into arrays
+DIM values[5]
+RESTORE
+FOR i = 0 TO 4
+  READ values[i]
+NEXT i
+
+' Multiple DATA statements accumulate
+DATA 100
+DATA 200
+DATA 300
+READ a, b, c  ' Gets 100, 200, 300
+```
+
+Key points:
+- DATA values accumulate in program order
+- READ consumes values sequentially
+- RESTORE resets to start of data pool
+- Can read into array elements: `READ arr[i]`
+- Supports numbers and strings
+- Reading past end causes "Out of DATA" error
 
 ## User-Defined Subroutines
 
@@ -178,6 +328,13 @@ PRINT "Current time: "; _
 ' Environment
 CALL Env.Get("HOME")
 PRINT "Home directory: "; _
+
+' Array introspection
+DIM matrix[5, 10]
+CALL ARR.DIMS("matrix")
+PRINT "Dimensions: "; _
+CALL ARR.SIZE("matrix", 0)
+PRINT "Rows: "; _
 ```
 
 ## Autostart Mods
@@ -201,32 +358,50 @@ Here's a more substantial example combining multiple features:
 
 ```basic
 #!/usr/bin/env prismshell
-' Fibonacci calculator with array caching
+' Matrix calculator
 
-10 PRINT "Fibonacci Calculator"
-20 PRINT "==================="
+10 PRINT "Matrix Operations Demo"
+20 PRINT "====================="
 30 PRINT ""
 
-' Initialize array
-40 DIM fib[50]
-50 LET fib[0] = 0
-60 LET fib[1] = 1
+' Initialize matrices
+40 DIM a[3, 3]
+50 DIM b[3, 3]
+60 DIM result[3, 3]
 
-' Calculate series
-70 LET i = 2
-80 WHILE i < 20
-90   LET fib[i] = fib[i-1] + fib[i-2]
-100  LET i = i + 1
-110 WEND
+' Fill with sample data
+70 DATA 1, 2, 3, 4, 5, 6, 7, 8, 9
+80 DATA 9, 8, 7, 6, 5, 4, 3, 2, 1
 
-' Display results
-120 LET i = 0
-130 WHILE i < 20
-140   PRINT "fib("; i; ") = "; fib[i]
-150   LET i = i + 1
-160 WEND
+90 FOR i = 0 TO 2
+100   FOR j = 0 TO 2
+110     READ a[i, j]
+120   NEXT j
+130 NEXT i
 
-170 END
+140 FOR i = 0 TO 2
+150   FOR j = 0 TO 2
+160     READ b[i, j]
+170   NEXT j
+180 NEXT i
+
+' Add matrices
+190 FOR i = 0 TO 2
+200   FOR j = 0 TO 2
+210     LET result[i, j] = a[i, j] + b[i, j]
+220   NEXT j
+230 NEXT i
+
+' Display result
+240 PRINT "Matrix A + Matrix B:"
+250 FOR i = 0 TO 2
+260   FOR j = 0 TO 2
+270     PRINT result[i, j]; " ";
+280   NEXT j
+290   PRINT ""
+300 NEXT i
+
+310 END
 ```
 
 ## Next Steps

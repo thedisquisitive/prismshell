@@ -25,19 +25,29 @@ struct ForLoopState {
   int loopStartLine;    // first line after FOR statement
 };
 
+// Multidimensional array support
+struct ArrayData {
+  std::vector<size_t> dimensions;  // e.g., [3, 4] for matrix[3,4]
+  std::vector<Value> data;         // flattened storage (row-major)
+  bool isDynamic{false};           // true if any dimension can auto-expand
+  
+  // Convert multi-index to linear index (row-major order)
+  size_t linearIndex(const std::vector<int>& indices) const;
+  
+  // Auto-expand for dynamic arrays
+  void ensureCapacity(const std::vector<int>& indices);
+};
+
 struct Runtime {
   std::map<std::string, Value> vars;   // variables (incl. PB_ARGV)
   std::map<int, std::string> program;  // line-numbered source
   Value lastCall;                       // `_`
 
-  // Phase 1: Arrays and SUBs
-  std::map<std::string, std::vector<Value>> arrays;  // arrays
+  std::map<std::string, ArrayData> arrays;
   std::map<std::string, SubDefinition> subs;         // user SUBs
 
-  // NEW Phase 2: FOR loop stack (for nested loops)
   std::vector<ForLoopState> forStack;
 
-  // NEW Phase 2: DATA/READ/RESTORE support
   std::vector<Value> dataPool;    // all DATA values in program order
   size_t dataPointer{0};          // current READ position
 

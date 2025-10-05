@@ -78,6 +78,55 @@ namespace pb {
     return (it == program.end()) ? std::numeric_limits<int>::max() : it->first;
   }
 
+  // ArrayData implementation
+  size_t ArrayData::linearIndex(const std::vector<int>& indices) const {
+    if (indices.size() != dimensions.size()) {
+      return 0;  // Dimension mismatch
+    }
+    
+    size_t idx = 0;
+    size_t multiplier = 1;
+    
+    // Row-major order (C-style): last index varies fastest
+    for (int i = (int)dimensions.size() - 1; i >= 0; --i) {
+      if (indices[i] < 0) return 0;  // Negative index
+      idx += (size_t)indices[i] * multiplier;
+      multiplier *= dimensions[i];
+    }
+    
+    return idx;
+  }
+
+  void ArrayData::ensureCapacity(const std::vector<int>& indices) {
+    if (!isDynamic) return;
+    
+    bool needsResize = false;
+    std::vector<size_t> newDims = dimensions;
+    
+    // Expand any dimension that's too small
+    for (size_t i = 0; i < indices.size(); ++i) {
+      if (indices[i] < 0) continue;  // Skip negative indices
+      
+      size_t needed = (size_t)indices[i] + 1;
+      if (needed > newDims[i]) {
+        newDims[i] = needed;
+        needsResize = true;
+      }
+    }
+    
+    if (needsResize) {
+      dimensions = newDims;
+      
+      // Calculate total size
+      size_t totalSize = 1;
+      for (auto d : dimensions) {
+        totalSize *= d;
+      }
+      
+      data.resize(totalSize);
+    }
+  }
+
 
 /* ---------------- SIGINT handling for program run ---------------- */
 namespace {
@@ -412,22 +461,40 @@ Value Runtime::eval(const ExprPtr& e){
       return Value{};
     }
 
-    // NEW: Array indexing
+    // Array indexing with multidimensional support
     case Expr::ArrIndex: {
       auto it = arrays.find(e->arrName);
-      if(it == arrays.end()) return Value{};  // array doesn't exist
+      if (it == arrays.end()) return Value{};
       
-      Value idxVal = eval(e->index);
-      int idx = 0;
-      if(std::holds_alternative<Number>(idxVal)) {
-        idx = (int)std::get<Number>(idxVal);
-      } else {
-        std::string s = to_string(idxVal);
-        try { idx = std::stoi(s); } catch(...) { idx = 0; }
+      std::vector<int> indices;
+      indices.reserve(e->indices.size());
+      
+      for (const auto& idxExpr : e->indices) {
+        Value idxVal = eval(idxExpr);
+        int idx = 0;
+        if (std::holds_alternative<Number>(idxVal)) {
+          idx = (int)std::get<Number>(idxVal);
+        } else {
+          std::string s = to_string(idxVal);
+          try { idx = std::stoi(s); } catch(...) { idx = 0; }
+        }
+        indices.push_back(idx);
       }
       
-      if(idx < 0 || idx >= (int)it->second.size()) return Value{};  // out of bounds
-      return it->second[idx];
+      // Validate dimension count
+      if (indices.size() != it->second.dimensions.size()) {
+        return Value{};  // Dimension mismatch
+      }
+      
+      // Auto-expand if dynamic
+      if (it->second.isDynamic) {
+        it->second.ensureCapacity(indices);
+      }
+      
+      size_t linearIdx = it->second.linearIndex(indices);
+      if (linearIdx >= it->second.data.size()) return Value{};
+      
+      return it->second.data[linearIdx];
     }
 
     case Expr::CallFn: {
@@ -490,48 +557,76 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
   switch(s->kind){
     case Stmt::Rem: break;
 
-    // NEW: DIM statement
+    // DIM statement with Multidimensional Array Support
     case Stmt::Dim: {
-      int size = 0;
-      if(s->dimSize) {
-        Value sizeVal = eval(s->dimSize);
-        if(std::holds_alternative<Number>(sizeVal)) {
-          size = (int)std::get<Number>(sizeVal);
+      ArrayData arr;
+      arr.dimensions.reserve(s->dimSizes.size());
+      
+      size_t totalSize = 1;
+      bool hasStaticDims = false;
+      
+      for (const auto& sizeExpr : s->dimSizes) {
+        if (!sizeExpr) {
+          // Dynamic dimension (nullptr or empty)
+          arr.dimensions.push_back(0);
+          arr.isDynamic = true;
         } else {
-          std::string str = to_string(sizeVal);
-          try { size = std::stoi(str); } catch(...) { size = 0; }
+          int dim = (int)asDouble(eval(sizeExpr));
+          if (dim < 0) dim = 0;
+          arr.dimensions.push_back(dim);
+          totalSize *= dim;
+          hasStaticDims = true;
         }
       }
-      // Create array with specified size (or empty if dynamic [])
-      if(size < 0) size = 0;
-      arrays[s->dimName] = std::vector<Value>(size);
+      
+      // Only pre-allocate if fully static
+      if (hasStaticDims && !arr.isDynamic) {
+        arr.data.resize(totalSize);
+      }
+      
+      arrays[s->dimName] = arr;
     } break;
 
-    // NEW: Array assignment
+    // Array assignment with multidimensional support
     case Stmt::ArrAssign: {
       auto it = arrays.find(s->arrName);
-      if(it == arrays.end()) {
-        // Auto-create array if it doesn't exist
-        arrays[s->arrName] = std::vector<Value>();
+      if (it == arrays.end()) {
+        // Auto-create dynamic array
+        ArrayData arr;
+        arr.isDynamic = true;
+        arr.dimensions.resize(s->arrIndices.size(), 0);
+        arrays[s->arrName] = arr;
         it = arrays.find(s->arrName);
       }
       
-      Value idxVal = eval(s->arrIndex);
-      int idx = 0;
-      if(std::holds_alternative<Number>(idxVal)) {
-        idx = (int)std::get<Number>(idxVal);
-      } else {
-        std::string str = to_string(idxVal);
-        try { idx = std::stoi(str); } catch(...) { idx = 0; }
+      std::vector<int> indices;
+      indices.reserve(s->arrIndices.size());
+      
+      for (const auto& idxExpr : s->arrIndices) {
+        Value idxVal = eval(idxExpr);
+        int idx = 0;
+        if (std::holds_alternative<Number>(idxVal)) {
+          idx = (int)std::get<Number>(idxVal);
+        } else {
+          std::string str = to_string(idxVal);
+          try { idx = std::stoi(str); } catch(...) { idx = 0; }
+        }
+        indices.push_back(idx);
       }
       
-      // Auto-expand array if needed
-      if(idx >= (int)it->second.size()) {
-        it->second.resize(idx + 1);
+      // Validate dimension count
+      if (indices.size() != it->second.dimensions.size()) {
+        break;  // Dimension mismatch - skip assignment
       }
       
-      if(idx >= 0) {
-        it->second[idx] = eval(s->arrValue);
+      // Auto-expand if needed
+      if (it->second.isDynamic) {
+        it->second.ensureCapacity(indices);
+      }
+      
+      size_t linearIdx = it->second.linearIndex(indices);
+      if (linearIdx < it->second.data.size()) {
+        it->second.data[linearIdx] = eval(s->arrValue);
       }
     } break;
 
@@ -791,8 +886,11 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
           // Reading into array element
           auto it = arrays.find(target.varName);
           if (it == arrays.end()) {
-            // Auto-create array if it doesn't exist
-            arrays[target.varName] = std::vector<Value>();
+            // Auto-create 1D dynamic array if it doesn't exist
+            ArrayData arr;
+            arr.isDynamic = true;
+            arr.dimensions = {0};
+            arrays[target.varName] = arr;
             it = arrays.find(target.varName);
           }
           
@@ -806,13 +904,17 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
             try { idx = std::stoi(str); } catch(...) { idx = 0; }
           }
           
-          // Auto-expand array if needed
-          if (idx >= (int)it->second.size()) {
-            it->second.resize(idx + 1);
+          // Ensure capacity for 1D array access
+          std::vector<int> indices = {idx};
+          if (it->second.isDynamic) {
+            it->second.ensureCapacity(indices);
           }
           
           if (idx >= 0) {
-            it->second[idx] = data;
+            size_t linearIdx = it->second.linearIndex(indices);
+            if (linearIdx < it->second.data.size()) {
+              it->second.data[linearIdx] = data;
+            }
           }
         } else {
           // Reading into simple variable
@@ -1076,10 +1178,35 @@ std::string up = qname;
     std::string name = asS(0);
     auto it = rt.arrays.find(name);
     if(it != rt.arrays.end()) {
-      return num((double)it->second.size());
+      // Return size of first dimension (or 0 for empty arrays)
+      if (it->second.dimensions.empty()) {
+        return num(0.0);
+      }
+      return num((double)it->second.dimensions[0]);
     }
     
     // For numbers or unknown, return 0
+    return num(0.0);
+  }
+
+  // ARR.DIMS - Get dimension count
+  if (up == "ARR.DIMS" && wantN(1)) {
+    std::string name = asS(0);
+    auto it = rt.arrays.find(name);
+    if (it != rt.arrays.end()) {
+      return num((double)it->second.dimensions.size());
+    }
+    return num(0.0);
+  }
+
+  // ARR.SIZE - Get size of specific dimension
+  if (up == "ARR.SIZE" && wantN(2)) {
+    std::string name = asS(0);
+    int dim = (int)asD(1);
+    auto it = rt.arrays.find(name);
+    if (it != rt.arrays.end() && dim >= 0 && dim < (int)it->second.dimensions.size()) {
+      return num((double)it->second.dimensions[dim]);
+    }
     return num(0.0);
   }
   // ------- Env.*
@@ -1288,18 +1415,26 @@ std::string up = qname;
   auto it = rt.arrays.find(arrName);
   if(it == rt.arrays.end()) {
     // Create array if needed
-    rt.arrays[arrName] = std::vector<Value>();
+    // Create 1D dynamic array
+    ArrayData arr;
+    arr.isDynamic = true;
+    arr.dimensions = {0};
+    rt.arrays[arrName] = arr;
     it = rt.arrays.find(arrName);
-  }
-  
-  // Auto-expand if needed
-  if(idx >= (int)it->second.size()) {
-    it->second.resize(idx + 1);
-  }
-  
-  if(idx >= 0) {
-    it->second[idx] = val;
-  }
+    }
+
+    // Ensure capacity for 1D array
+    std::vector<int> indices = {idx};
+    if (it->second.isDynamic) {
+      it->second.ensureCapacity(indices);
+    }
+
+    if (idx >= 0) {
+      size_t linearIdx = it->second.linearIndex(indices);
+      if (linearIdx < it->second.data.size()) {
+        it->second.data[linearIdx] = val;
+      }
+    }
   
   return Value{};
 }

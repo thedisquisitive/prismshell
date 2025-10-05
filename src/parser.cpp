@@ -58,13 +58,22 @@ ExprPtr Parser::parseFactor() {
     
     // Check for array indexing: name[expr]
     if (match(TokKind::LBracket)) {
-      auto idx = parseExpr();
-      match(TokKind::RBracket);  // consume closing bracket
+      std::vector<ExprPtr> indices;
+      
+      while (true) {
+        auto idx = parseExpr();
+        if (!idx) break;
+        indices.push_back(idx);
+        
+        if (match(TokKind::RBracket)) break;
+        if (!match(TokKind::Comma)) break;
+      }
+      
       auto arr = std::make_shared<Expr>();
       arr->kind = Expr::ArrIndex;
       arr->line = savedLine;
       arr->arrName = name;
-      arr->index = idx;
+      arr->indices = indices;
       return arr;
     }
     
@@ -170,25 +179,46 @@ StmtPtr Parser::parseStmt() {
     return s;
   }
 
-  // NEW: DIM name[size] or DIM name[]
+  // DIM name[sz1, sz2, sz3...] or  DIM name[, ,] for dynamic arrays
   if (t.k == TokKind::Dim) {
     pop();  // consume DIM
     if (peek().k != TokKind::Id) return nullptr;
     std::string name = pop().text;
     if (!match(TokKind::LBracket)) return nullptr;
     
-    ExprPtr size = nullptr;
-    if (peek().k != TokKind::RBracket) {
-      size = parseExpr();  // parse size expression
-    }
+    std::vector<ExprPtr> sizes;
     
-    if (!match(TokKind::RBracket)) return nullptr;
+    // Parse comma-separated dimensions
+    while (true) {
+      // Check for empty dimension (dynamic): DIM arr[, ] or trailing comma
+      if (peek().k == TokKind::RBracket || peek().k == TokKind::Comma) {
+        sizes.push_back(nullptr);  // nullptr = dynamic dimension
+        
+        if (match(TokKind::RBracket)) break;
+        if (match(TokKind::Comma)) {
+          // Continue to next dimension
+          if (peek().k == TokKind::RBracket) {
+            // Trailing comma before ]: another dynamic dimension
+            continue;
+          }
+        }
+        continue;
+      }
+      
+      // Parse size expression
+      auto size = parseExpr();
+      if (!size) return nullptr;
+      sizes.push_back(size);
+      
+      if (match(TokKind::RBracket)) break;
+      if (!match(TokKind::Comma)) return nullptr;
+    }
     
     auto s = std::make_shared<Stmt>();
     s->kind = Stmt::Dim;
     s->line = t.line;
     s->dimName = name;
-    s->dimSize = size;  // nullptr means dynamic []
+    s->dimSizes = sizes;
     return s;
   }
 
@@ -332,11 +362,20 @@ StmtPtr Parser::parseStmt() {
     if (peek().k != TokKind::Id) return nullptr;
     std::string name = pop().text;
     
-    // Check for array assignment: LET name[index] = expr
+    // Check for array assignment: LET name[index1, index2, ...] = expr
     if (peek().k == TokKind::LBracket) {
       pop();  // consume [
-      auto idx = parseExpr();
-      if (!match(TokKind::RBracket)) return nullptr;
+      
+      std::vector<ExprPtr> indices;
+      while (true) {
+        auto idx = parseExpr();
+        if (!idx) break;
+        indices.push_back(idx);
+        
+        if (match(TokKind::RBracket)) break;
+        if (!match(TokKind::Comma)) break;
+      }
+      
       if (!match(TokKind::Eq)) return nullptr;
       auto val = parseExpr();
       
@@ -344,7 +383,7 @@ StmtPtr Parser::parseStmt() {
       s->kind = Stmt::ArrAssign;
       s->line = t.line;
       s->arrName = name;
-      s->arrIndex = idx;
+      s->arrIndices = indices;
       s->arrValue = val;
       return s;
     }

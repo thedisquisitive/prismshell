@@ -31,7 +31,7 @@ struct Expr {
 
   // for ArrIndex
   std::string arrName;
-  ExprPtr index;
+  std::vector<ExprPtr> indices;
 
   // binary arithmetic
   char op{0};                // + - * / ^
@@ -87,11 +87,11 @@ struct Stmt {
 
   // DIM
   std::string dimName;
-  ExprPtr dimSize;  // nullptr means dynamic []
+  std::vector<ExprPtr> dimSizes;
 
   // ArrAssign
   std::string arrName;
-  ExprPtr arrIndex;
+  std::vector<ExprPtr> arrIndices;
   ExprPtr arrValue;
 
   // SubDef
