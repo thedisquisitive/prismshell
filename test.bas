@@ -394,6 +394,209 @@ PRINT "  sparse[10, 5, 3] = "; sparse[10, 5, 3]
 PRINT "  PASS"
 PRINT ""
 
+' ===== Test 33: AND/OR Operators =====
+PRINT "Test 33: AND/OR Operators"
+LET x = 5
+LET y = 10
+IF x > 0 AND y > 0 THEN
+  PRINT "  Both positive: PASS"
+ENDIF
+IF x < 0 OR y > 0 THEN
+  PRINT "  At least one true: PASS"
+ENDIF
+LET a = 1
+LET b = 0
+IF a AND b THEN
+  PRINT "  ERROR: 1 AND 0 should be false"
+ELSE
+  PRINT "  1 AND 0 = false: PASS"
+ENDIF
+IF a OR b THEN
+  PRINT "  1 OR 0 = true: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 34: LEFT/RIGHT Functions =====
+PRINT "Test 34: LEFT/RIGHT Functions"
+CALL LEFT("Hello World", 5)
+PRINT "  LEFT('Hello World', 5) = '"; _; "'"
+IF _ == "Hello" THEN
+  PRINT "  LEFT: PASS"
+ENDIF
+CALL RIGHT("Hello World", 5)
+PRINT "  RIGHT('Hello World', 5) = '"; _; "'"
+IF _ == "World" THEN
+  PRINT "  RIGHT: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 35: MID Function =====
+PRINT "Test 35: MID Function"
+CALL MID("Hello World", 7, 5)
+PRINT "  MID('Hello World', 7, 5) = '"; _; "'"
+IF _ == "World" THEN
+  PRINT "  MID with length: PASS"
+ENDIF
+CALL MID("Hello World", 7)
+PRINT "  MID('Hello World', 7) = '"; _; "'"
+IF _ == "World" THEN
+  PRINT "  MID to end: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 36: INSTR Function =====
+PRINT "Test 36: INSTR Function"
+CALL INSTR("Hello World", "World")
+PRINT "  INSTR('Hello World', 'World') = "; _
+IF _ == 7 THEN
+  PRINT "  INSTR found: PASS"
+ENDIF
+CALL INSTR("Hello World", "xyz")
+PRINT "  INSTR('Hello World', 'xyz') = "; _
+IF _ == 0 THEN
+  PRINT "  INSTR not found: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 37: CHR/ASC Functions =====
+PRINT "Test 37: CHR/ASC Functions"
+CALL CHR(65)
+PRINT "  CHR(65) = '"; _; "'"
+IF _ == "A" THEN
+  PRINT "  CHR: PASS"
+ENDIF
+CALL ASC("Hello")
+PRINT "  ASC('Hello') = "; _
+IF _ == 72 THEN
+  PRINT "  ASC: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 38: UCASE/LCASE Functions =====
+PRINT "Test 38: UCASE/LCASE Functions"
+CALL UCASE("Hello World")
+PRINT "  UCASE('Hello World') = '"; _; "'"
+IF _ == "HELLO WORLD" THEN
+  PRINT "  UCASE: PASS"
+ENDIF
+CALL LCASE("Hello World")
+PRINT "  LCASE('Hello World') = '"; _; "'"
+IF _ == "hello world" THEN
+  PRINT "  LCASE: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 39: TRIM Functions =====
+PRINT "Test 39: TRIM Functions"
+CALL TRIM("  Hello World  ")
+PRINT "  TRIM('  Hello World  ') = '"; _; "'"
+IF _ == "Hello World" THEN
+  PRINT "  TRIM: PASS"
+ENDIF
+CALL LTRIM("  Hello World  ")
+IF _ == "Hello World  " THEN
+  PRINT "  LTRIM: PASS"
+ENDIF
+CALL RTRIM("  Hello World  ")
+IF _ == "  Hello World" THEN
+  PRINT "  RTRIM: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 40: STR/VAL Functions =====
+PRINT "Test 40: STR/VAL Functions"
+CALL STR(123.45)
+PRINT "  STR(123.45) = '"; _; "'"
+LET s = _
+CALL VAL(s)
+PRINT "  VAL('"; s; "') = "; _
+IF _ == 123.45 THEN
+  PRINT "  STR/VAL round-trip: PASS"
+ENDIF
+CALL VAL("42")
+IF _ == 42 THEN
+  PRINT "  VAL integer: PASS"
+ENDIF
+CALL VAL("not a number")
+IF _ == 0 THEN
+  PRINT "  VAL invalid returns 0: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 41: String Manipulation Examples =====
+PRINT "Test 41: String Manipulation Examples"
+LET sentence = "The Quick Brown Fox"
+CALL LCASE(sentence)
+LET lower = _
+CALL UCASE(sentence)
+LET upper = _
+PRINT "  Original: "; sentence
+PRINT "  Lower: "; lower
+PRINT "  Upper: "; upper
+
+LET text = "Hello, World!"
+CALL INSTR(text, ",")
+LET comma_pos = _
+CALL LEFT(text, comma_pos - 1)
+LET before = _
+CALL MID(text, comma_pos + 2)
+LET after = _
+PRINT "  Split '"; text; "' at comma:"
+PRINT "    Before: '"; before; "'"
+PRINT "    After: '"; after; "'"
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 42: Building Strings with CHR =====
+PRINT "Test 42: Building Strings with CHR"
+LET alphabet = ""
+FOR i = 65 TO 90
+  CALL CHR(i)
+  LET alphabet = alphabet + _
+NEXT i
+PRINT "  Alphabet: "; alphabet
+CALL LEN(alphabet)
+IF _ == 26 THEN
+  PRINT "  Built 26-char alphabet: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 43: Parsing with String Functions =====
+PRINT "Test 43: Parsing CSV-like Data"
+LET csv = "Alice,25,Engineer"
+CALL INSTR(csv, ",")
+LET pos1 = _
+CALL LEFT(csv, pos1 - 1)
+LET name = _
+CALL MID(csv, pos1 + 1)
+LET rest = _
+CALL INSTR(rest, ",")
+LET pos2 = _
+CALL LEFT(rest, pos2 - 1)
+LET age_str = _
+CALL VAL(age_str)
+LET age = _
+CALL MID(rest, pos2 + 1)
+LET job = _
+PRINT "  Parsed CSV: '"; csv; "'"
+PRINT "    Name: "; name
+PRINT "    Age: "; age
+PRINT "    Job: "; job
+IF name == "Alice" AND age == 25 AND job == "Engineer" THEN
+  PRINT "  CSV parsing: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
 PRINT "========================================="
 PRINT "All Tests Complete!"
 PRINT "========================================="

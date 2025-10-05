@@ -34,6 +34,8 @@ namespace pb {
 bool mod_has(const std::string& name);
 int  mod_run(const std::string& name, const std::vector<std::string>& args, Runtime& parent);
 int  mod_run_capture(const std::string& name, const std::vector<std::string>& args, Runtime& parent, std::string* out);
+static Value num(double d) { return Value{d}; }
+static Value str(std::string s) { return Value{std::move(s)}; }
 
 // ---------------- SIGINT (Ctrl-C) handling ----------------
 namespace {
@@ -575,7 +577,6 @@ for (const auto& m : toRun) {
   }
 }
 
-  /// Run a file/script
   int Interpreter::run_file(const std::string& path, const std::vector<std::string>& args){
     std::ifstream f(path);
     if(!f){
@@ -591,8 +592,25 @@ for (const auto& m : toRun) {
       content = (nl == std::string::npos) ? std::string() : content.substr(nl + 1);
     }
 
-    // Pass argv to program
-    rt.vars["PB_ARGV"] = json_array(args);
+    // UPDATED: Pass argv to program in multiple formats
+    rt.vars["PB_ARGV"] = json_array(args);  // Legacy compatibility
+    rt.vars["PB_ARGC"] = num((double)args.size());
+    
+    // Individual PB_ARG0, PB_ARG1, etc.
+    for (size_t i = 0; i < args.size(); ++i) {
+      std::string key = "PB_ARG" + std::to_string(i);
+      rt.vars[key] = str(args[i]);
+    }
+    
+    // NEW: Create ARGV array for direct access
+    ArrayData argv_array;
+    argv_array.dimensions = {args.size()};
+    argv_array.isDynamic = false;
+    argv_array.data.resize(args.size());
+    for (size_t i = 0; i < args.size(); ++i) {
+      argv_array.data[i] = str(args[i]);
+    }
+    rt.arrays["ARGV"] = argv_array;
 
     // Helper: detect BASIC comment line after trimming
     auto is_comment_line = [](const std::string& t)->bool{

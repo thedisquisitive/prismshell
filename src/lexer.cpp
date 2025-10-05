@@ -94,6 +94,8 @@ std::vector<Token> Lexer::lex(){
       else if(up=="NEXT")   push(TokKind::Next);
       else if(up=="DATA")   push(TokKind::Data);
       else if(up=="READ")   push(TokKind::Read);
+      else if(up=="AND")   push(TokKind::And);
+      else if(up=="OR")   push(TokKind::Or);
       else if(up=="RESTORE") push(TokKind::Restore);
       else                  push(TokKind::Id, id);
       continue;

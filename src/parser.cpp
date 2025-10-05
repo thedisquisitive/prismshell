@@ -56,7 +56,7 @@ ExprPtr Parser::parseFactor() {
     int savedLine = t.line;
     pop();
     
-    // Check for array indexing: name[expr]
+    // Check for array indexing: name[expr, expr, ...]
     if (match(TokKind::LBracket)) {
       std::vector<ExprPtr> indices;
       
@@ -130,8 +130,8 @@ ExprPtr Parser::parseTerm() {
   return left;
 }
 
-
-ExprPtr Parser::parseExpr() {
+// NEW: Parse comparison and arithmetic (what parseExpr used to do)
+ExprPtr Parser::parseCompExpr() {
   // additive layer
   auto left = parseTerm();
   while (!eof() && (peek().k == TokKind::Plus || peek().k == TokKind::Minus)) {
@@ -156,11 +156,47 @@ ExprPtr Parser::parseExpr() {
       default: break;
     }
     pop();
-    auto right = parseTerm(); // right-assoc with same precedence as +/-
+    auto right = parseTerm();
     auto b = std::make_shared<Expr>();
     b->kind = Expr::Bin; b->cmp = cmp; b->left = left; b->right = right;
     left = b;
   }
+  return left;
+}
+
+// NEW: Parse AND expressions (higher precedence than OR, lower than comparisons)
+ExprPtr Parser::parseAndExpr() {
+  auto left = parseCompExpr();
+  
+  while (!eof() && peek().k == TokKind::And) {
+    pop();
+    auto right = parseCompExpr();
+    auto b = std::make_shared<Expr>();
+    b->kind = Expr::Bin;
+    b->cmp = "&&";
+    b->left = left;
+    b->right = right;
+    left = b;
+  }
+  
+  return left;
+}
+
+// MODIFIED: Parse OR expressions (lowest precedence)
+ExprPtr Parser::parseExpr() {
+  auto left = parseAndExpr();
+  
+  while (!eof() && peek().k == TokKind::Or) {
+    pop();
+    auto right = parseAndExpr();
+    auto b = std::make_shared<Expr>();
+    b->kind = Expr::Bin;
+    b->cmp = "||";
+    b->left = left;
+    b->right = right;
+    left = b;
+  }
+  
   return left;
 }
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-## ✅ Phase 1 Complete
+## ✅ Phase 1 Complete (Current Release)
 - ✅ Block control flow: `IF...ELSEIF...ELSE...ENDIF`, `WHILE/WEND`
 - ✅ User `SUB ... END SUB` with parameters and return values
 - ✅ Arrays: `DIM name[size]` and `DIM name[]` with dynamic expansion
@@ -13,54 +13,39 @@
 - ✅ Time functions (`Time.Now()`)
 - ✅ Exponentiation operator (`^`)
 
-## ✅ Phase 2 Complete (Current Release)
-- ✅ `FOR/NEXT` loops with STEP support (including negative steps)
-- ✅ Nested FOR loops
-- ✅ `DATA/READ/RESTORE` for embedded data
-- ✅ Multi-dimensional arrays (`DIM arr[x,y]`, `DIM arr[x,y,z]`, etc.)
-- ✅ Dynamic multidimensional arrays (`DIM arr[, ]`)
-- ✅ Mixed static/dynamic dimensions (`DIM arr[10, ]`)
-- ✅ Array dimension queries (`ARR.DIMS()`, `ARR.SIZE()`)
-- ✅ Row-major storage model (C-style)
-- ✅ READ into array elements (`READ arr[i]`, `READ matrix[i,j]`)
-
-## Phase 3: String Manipulation & Enhanced I/O
-- String manipulation functions (LEFT, RIGHT, MID, INSTR, CHR, ASC)
-- String comparison functions (STRCMP, UCASE, LCASE)
-- String trimming and splitting (TRIM, LTRIM, RTRIM, SPLIT)
-- STR/VAL for number↔string conversion
+## Phase 2: Enhanced Data Structures
+- `FOR/NEXT` loops with step support
+- `DATA/READ/RESTORE` for embedded data
+- Multi-dimensional arrays (`DIM arr[x,y]`)
+- String manipulation functions (LEFT, RIGHT, MID, INSTR, etc.)
 - Better argv handling (parse PB_ARGV as proper array value)
 - Hash maps / associative arrays
-- File handles and streaming I/O
 
-## Phase 4: Advanced Language Features
+## Phase 3: Advanced Features
 - Local variables in SUBs (explicit `LOCAL` keyword)
 - Pass-by-reference for arrays to SUBs
 - Error handling (`ON ERROR`, `TRY/CATCH`)
+- File handles and streaming I/O
 - Regular expression support
 - JSON parsing/generation builtins
-- SELECT CASE statements
-- DO...LOOP variants (DO WHILE, DO UNTIL, LOOP WHILE, LOOP UNTIL)
 
-## Phase 5: Development Tools
+## Phase 4: Development Tools
 - Colors in prompt (Readline-safe ANSI wrappers)
 - Line editor improvements (syntax highlighting, auto-completion)
 - Debug mode with breakpoints and step execution
 - `TRACE ON/OFF` for execution logging
 - Performance profiling tools
 - Unit testing framework for BASIC programs
-- Interactive debugger commands (STEP, CONTINUE, BREAK, WATCH)
 
-## Phase 6: Advanced Runtime
+## Phase 5: Advanced Runtime
 - Bytecode compilation + small VM (currently AST interpreter)
 - JIT optimization for hot loops
 - Coroutines / cooperative multitasking
 - Module system for CALL providers (C++ plugins via dlopen/LoadLibrary)
 - Foreign function interface (FFI) for calling C libraries
 - WebAssembly compilation target
-- Tail call optimization for recursive SUBs
 
-## Phase 7: PrismFS & Versioning
+## Phase 6: PrismFS & Versioning
 - Real PrismFS backends (`MOUNT.ADD`, `SNAPSHOT`, `BRANCH`)
 - Git-like version control operations
 - Overlay filesystem support
@@ -85,14 +70,13 @@
 
 ## Performance & Optimization
 - Lazy evaluation strategies
+- Tail call optimization for recursive SUBs
 - Constant folding and expression optimization
 - String interning for frequently used literals
 - Memory pool allocators for runtime objects
 
 ---
 
-**Current Status:** Phase 2 complete. The implementation now includes full block control flow, user-defined subroutines, FOR/NEXT loops, DATA/READ/RESTORE, and multidimensional arrays with both fixed and dynamic sizing. The shell is production-ready for scripting and interactive use with comprehensive array support.
+**Current Status:** Phase 1 complete. The MVP now includes full block control flow, user-defined subroutines, arrays with dynamic sizing, and a comprehensive set of filesystem, path, and utility builtins. The shell is production-ready for scripting and interactive use.
 
-**Next Milestone:** Phase 3 focus on string manipulation functions and enhanced I/O capabilities.
-
----
+**Next Milestone:** Phase 2 focus on `FOR/NEXT` loops and `DATA/READ/RESTORE` for classic BASIC data handling patterns.

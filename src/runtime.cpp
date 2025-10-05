@@ -513,6 +513,22 @@ Value Runtime::eval(const ExprPtr& e){
 
     case Expr::Bin: {
       if(!e->cmp.empty()){
+        // Handle logical operators FIRST (with short-circuit evaluation)
+        if(e->cmp == "&&") {
+          Value L = eval(e->left);
+          if (!truthy(L)) return num(0.0);  // Short-circuit: false AND anything = false
+          Value R = eval(e->right);
+          return num(truthy(R) ? 1.0 : 0.0);
+        }
+        
+        if(e->cmp == "||") {
+          Value L = eval(e->left);
+          if (truthy(L)) return num(1.0);   // Short-circuit: true OR anything = true
+          Value R = eval(e->right);
+          return num(truthy(R) ? 1.0 : 0.0);
+        }
+        
+        // Other comparison operators
         Value L = eval(e->left), R = eval(e->right);
         std::string ls = to_string(L), rs = to_string(R);
         double ln = std::holds_alternative<Number>(L) ? std::get<Number>(L) : std::atof(ls.c_str());
@@ -1189,6 +1205,32 @@ std::string up = qname;
     return num(0.0);
   }
 
+  // ARGV(index) - Get command-line argument by index (0-based)
+  if (up == "ARGV" && wantN(1)) {
+    int idx = (int)asD(0);
+    
+    // Check if ARGV array exists
+    auto it = rt.arrays.find("ARGV");
+    if (it == rt.arrays.end()) {
+      return str("");  // No args
+    }
+    
+    if (idx < 0 || idx >= (int)it->second.data.size()) {
+      return str("");  // Out of bounds
+    }
+    
+    return it->second.data[idx];
+  }
+
+  // ARGC() - Get argument count
+  if (up == "ARGC" && wantN(0)) {
+    auto it = rt.arrays.find("ARGV");
+    if (it == rt.arrays.end()) {
+      return num(0.0);
+    }
+    return num((double)it->second.data.size());
+  }
+
   // ARR.DIMS - Get dimension count
   if (up == "ARR.DIMS" && wantN(1)) {
     std::string name = asS(0);
@@ -1197,6 +1239,137 @@ std::string up = qname;
       return num((double)it->second.dimensions.size());
     }
     return num(0.0);
+  }
+
+  // ------- String manipulation functions -------
+
+  // LEFT(str, n) - leftmost n characters
+  if (up == "LEFT" && wantN(2)) {
+    std::string s = asS(0);
+    int n = (int)asD(1);
+    if (n < 0) n = 0;
+    if (n > (int)s.size()) n = (int)s.size();
+    return str(s.substr(0, n));
+  }
+
+  // RIGHT(str, n) - rightmost n characters
+  if (up == "RIGHT" && wantN(2)) {
+    std::string s = asS(0);
+    int n = (int)asD(1);
+    if (n < 0) n = 0;
+    if (n > (int)s.size()) n = (int)s.size();
+    return str(s.substr(s.size() - n, n));
+  }
+
+  // MID(str, start, len) - substring from start (1-based) for len chars
+  if (up == "MID" && (wantN(2) || wantN(3))) {
+    std::string s = asS(0);
+    int start = (int)asD(1) - 1;  // Convert to 0-based
+    int len = wantN(3) ? (int)asD(2) : (int)s.size();
+    
+    if (start < 0) start = 0;
+    if (start >= (int)s.size()) return str("");
+    if (len < 0) len = 0;
+    if (start + len > (int)s.size()) len = (int)s.size() - start;
+    
+    return str(s.substr(start, len));
+  }
+
+  // INSTR(haystack, needle) - find position of substring (1-based, 0 if not found)
+  if (up == "INSTR" && wantN(2)) {
+    std::string haystack = asS(0);
+    std::string needle = asS(1);
+    size_t pos = haystack.find(needle);
+    if (pos == std::string::npos) return num(0.0);
+    return num((double)(pos + 1));  // 1-based indexing
+  }
+
+  // CHR(code) - ASCII code to character
+  if (up == "CHR" && wantN(1)) {
+    int code = (int)asD(0);
+    if (code < 0 || code > 255) return str("");
+    char c = (char)code;
+    return str(std::string(1, c));
+  }
+
+  // ASC(str) - first character to ASCII code
+  if (up == "ASC" && wantN(1)) {
+    std::string s = asS(0);
+    if (s.empty()) return num(0.0);
+    return num((double)(unsigned char)s[0]);
+  }
+
+  // UCASE(str) - convert to uppercase
+  if (up == "UCASE" && wantN(1)) {
+    std::string s = asS(0);
+    for (char& c : s) {
+      c = (char)std::toupper((unsigned char)c);
+    }
+    return str(s);
+  }
+
+  // LCASE(str) - convert to lowercase
+  if (up == "LCASE" && wantN(1)) {
+    std::string s = asS(0);
+    for (char& c : s) {
+      c = (char)std::tolower((unsigned char)c);
+    }
+    return str(s);
+  }
+
+  // TRIM(str) - remove leading and trailing whitespace
+  if (up == "TRIM" && wantN(1)) {
+    std::string s = asS(0);
+    size_t start = 0;
+    while (start < s.size() && std::isspace((unsigned char)s[start])) {
+      ++start;
+    }
+    if (start >= s.size()) return str("");
+    
+    size_t end = s.size();
+    while (end > start && std::isspace((unsigned char)s[end - 1])) {
+      --end;
+    }
+    
+    return str(s.substr(start, end - start));
+  }
+
+  // LTRIM(str) - remove leading whitespace
+  if (up == "LTRIM" && wantN(1)) {
+    std::string s = asS(0);
+    size_t start = 0;
+    while (start < s.size() && std::isspace((unsigned char)s[start])) {
+      ++start;
+    }
+    return str(s.substr(start));
+  }
+
+  // RTRIM(str) - remove trailing whitespace
+  if (up == "RTRIM" && wantN(1)) {
+    std::string s = asS(0);
+    size_t end = s.size();
+    while (end > 0 && std::isspace((unsigned char)s[end - 1])) {
+      --end;
+    }
+    return str(s.substr(0, end));
+  }
+
+  // STR(number) - number to string
+  if (up == "STR" && wantN(1)) {
+    double n = asD(0);
+    std::ostringstream oss;
+    oss << std::setprecision(15) << n;
+    return str(oss.str());
+  }
+
+  // VAL(str) - string to number
+  if (up == "VAL" && wantN(1)) {
+    std::string s = asS(0);
+    try {
+      return num(std::stod(s));
+    } catch (...) {
+      return num(0.0);
+    }
   }
 
   // ARR.SIZE - Get size of specific dimension

@@ -31,13 +31,13 @@ struct Expr {
 
   // for ArrIndex
   std::string arrName;
-  std::vector<ExprPtr> indices;
+  std::vector<ExprPtr> indices;  // CHANGED: supports multidimensional
 
   // binary arithmetic
   char op{0};                // + - * / ^
 
-  // comparisons
-  std::string cmp;           // "==","!=", "<","<=",">",">="
+  // comparisons and logical operators
+  std::string cmp;           // "==","!=", "<","<=",">",">=", "&&", "||"
   ExprPtr left, right;
 };
 
@@ -87,11 +87,11 @@ struct Stmt {
 
   // DIM
   std::string dimName;
-  std::vector<ExprPtr> dimSizes;
+  std::vector<ExprPtr> dimSizes;  // CHANGED: supports multidimensional
 
   // ArrAssign
   std::string arrName;
-  std::vector<ExprPtr> arrIndices;
+  std::vector<ExprPtr> arrIndices;  // CHANGED: supports multidimensional
   ExprPtr arrValue;
 
   // SubDef
@@ -129,15 +129,17 @@ private:
   Token pop();
   bool match(TokKind k);
 
-  ExprPtr parseExpr();
-  ExprPtr parseTerm();
-  ExprPtr parseFactor();
+  ExprPtr parseExpr();        // OR (lowest precedence)
+  ExprPtr parseAndExpr();     // AND
+  ExprPtr parseCompExpr();    // comparisons and arithmetic
+  ExprPtr parseTerm();        // * / ^
+  ExprPtr parseFactor();      // literals, unary, parens
 
   StmtPtr parseStmt();
 };
 
 // Is the first token of a line an Id equal to kw (case-insensitive)?
-static bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
+static inline bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
   Lexer lx(src, line);
   auto ts = lx.lex();
   if(ts.empty()) return false;
