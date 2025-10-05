@@ -45,6 +45,7 @@ struct Runtime {
 
   std::map<std::string, ArrayData> arrays;
   std::map<std::string, SubDefinition> subs;         // user SUBs
+  std::map<std::string, std::map<std::string, Value>> maps; // Hashmaps
 
   std::vector<ForLoopState> forStack;
 

@@ -1581,36 +1581,139 @@ std::string up = qname;
   }
 
   if(up=="ARR.SET" && wantN(3)){
-  std::string arrName = asS(0);
-  int idx = (int)asD(1);
-  Value val = args[2];
-  
-  auto it = rt.arrays.find(arrName);
-  if(it == rt.arrays.end()) {
-    // Create array if needed
-    // Create 1D dynamic array
-    ArrayData arr;
-    arr.isDynamic = true;
-    arr.dimensions = {0};
-    rt.arrays[arrName] = arr;
-    it = rt.arrays.find(arrName);
-    }
-
-    // Ensure capacity for 1D array
-    std::vector<int> indices = {idx};
-    if (it->second.isDynamic) {
-      it->second.ensureCapacity(indices);
-    }
-
-    if (idx >= 0) {
-      size_t linearIdx = it->second.linearIndex(indices);
-      if (linearIdx < it->second.data.size()) {
-        it->second.data[linearIdx] = val;
+    std::string arrName = asS(0);
+    int idx = (int)asD(1);
+    Value val = args[2];
+    
+    auto it = rt.arrays.find(arrName);
+    if(it == rt.arrays.end()) {
+      // Create array if needed
+      // Create 1D dynamic array
+      ArrayData arr;
+      arr.isDynamic = true;
+      arr.dimensions = {0};
+      rt.arrays[arrName] = arr;
+      it = rt.arrays.find(arrName);
       }
+
+      // Ensure capacity for 1D array
+      std::vector<int> indices = {idx};
+      if (it->second.isDynamic) {
+        it->second.ensureCapacity(indices);
+      }
+
+      if (idx >= 0) {
+        size_t linearIdx = it->second.linearIndex(indices);
+        if (linearIdx < it->second.data.size()) {
+          it->second.data[linearIdx] = val;
+        }
+      }
+    
+    return Value{};
+  }
+
+  // MAP.SET(mapname, key, value) - Set a key-value pair
+  if (up == "MAP.SET" && wantN(3)) {
+    std::string mapname = asS(0);
+    std::string key = asS(1);
+    Value val = args[2];
+    
+    // Create map if it doesn't exist
+    if (rt.maps.find(mapname) == rt.maps.end()) {
+      rt.maps[mapname] = std::map<std::string, Value>();
     }
-  
-  return Value{};
-}
+    
+    rt.maps[mapname][key] = val;
+    return val;
+  }
+
+  // MAP.GET(mapname, key [, default]) - Get value for key
+  if (up == "MAP.GET" && (wantN(2) || wantN(3))) {
+    std::string mapname = asS(0);
+    std::string key = asS(1);
+    Value default_val = wantN(3) ? args[2] : Value{};
+    
+    auto map_it = rt.maps.find(mapname);
+    if (map_it == rt.maps.end()) {
+      return default_val;
+    }
+    
+    auto key_it = map_it->second.find(key);
+    if (key_it == map_it->second.end()) {
+      return default_val;
+    }
+    
+    return key_it->second;
+  }
+
+  // MAP.HAS(mapname, key) - Check if key exists
+  if (up == "MAP.HAS" && wantN(2)) {
+    std::string mapname = asS(0);
+    std::string key = asS(1);
+    
+    auto map_it = rt.maps.find(mapname);
+    if (map_it == rt.maps.end()) {
+      return num(0.0);
+    }
+    
+    auto key_it = map_it->second.find(key);
+    return num(key_it != map_it->second.end() ? 1.0 : 0.0);
+  }
+
+  // MAP.DELETE(mapname, key) - Remove a key
+  if (up == "MAP.DELETE" && wantN(2)) {
+    std::string mapname = asS(0);
+    std::string key = asS(1);
+    
+    auto map_it = rt.maps.find(mapname);
+    if (map_it == rt.maps.end()) {
+      return num(0.0);
+    }
+    
+    size_t erased = map_it->second.erase(key);
+    return num(erased > 0 ? 1.0 : 0.0);
+  }
+
+  // MAP.KEYS(mapname) - Get all keys as newline-separated string
+  if (up == "MAP.KEYS" && wantN(1)) {
+    std::string mapname = asS(0);
+    
+    auto map_it = rt.maps.find(mapname);
+    if (map_it == rt.maps.end()) {
+      return str("");
+    }
+    
+    std::string result;
+    for (const auto& kv : map_it->second) {
+      if (!result.empty()) result += "\n";
+      result += kv.first;
+    }
+    return str(result);
+  }
+
+  // MAP.SIZE(mapname) - Get number of entries
+  if (up == "MAP.SIZE" && wantN(1)) {
+    std::string mapname = asS(0);
+    
+    auto map_it = rt.maps.find(mapname);
+    if (map_it == rt.maps.end()) {
+      return num(0.0);
+    }
+    
+    return num((double)map_it->second.size());
+  }
+
+  // MAP.CLEAR(mapname) - Remove all entries
+  if (up == "MAP.CLEAR" && wantN(1)) {
+    std::string mapname = asS(0);
+    
+    auto map_it = rt.maps.find(mapname);
+    if (map_it != rt.maps.end()) {
+      map_it->second.clear();
+    }
+    
+    return Value{};
+  }
 
   // Unknown -> empty
   return Value{};

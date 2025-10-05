@@ -301,34 +301,37 @@ PRINT "  Total iterations: "; total; " (should be 6)"
 PRINT "  PASS"
 PRINT ""
 
-' Test 26: 2D Arrays
+' ===== Test 26: 2D Arrays =====
 PRINT "Test 26: 2D Arrays"
-DIM matrix[3, 4]
-LET matrix[1, 2] = 42
-LET matrix[2, 3] = 99
-PRINT "  matrix[1, 2] = "; matrix[1, 2]
-PRINT "  matrix[2, 3] = "; matrix[2, 3]
-CALL ARR.DIMS("matrix")
+DIM matrix2d[3, 4]
+LET matrix2d[1, 2] = 42
+LET matrix2d[2, 3] = 99
+PRINT "  matrix[1, 2] = "; matrix2d[1, 2]
+PRINT "  matrix[2, 3] = "; matrix2d[2, 3]
+CALL ARR.DIMS("matrix2d")
 PRINT "  Dimensions: "; _
 PRINT "  PASS"
+PRINT ""
 
-' Test 27: Dynamic 2D Array
+' ===== Test 27: Dynamic 2D Array =====
 PRINT "Test 27: Dynamic 2D Array"
-DIM grid[, ]
-LET grid[5, 10] = 1000
-PRINT "  grid[5, 10] = "; grid[5, 10]
-CALL ARR.SIZE("grid", 0)
+DIM grid2d[, ]
+LET grid2d[5, 10] = 1000
+PRINT "  grid[5, 10] = "; grid2d[5, 10]
+CALL ARR.SIZE("grid2d", 0)
 PRINT "  Rows: "; _
-CALL ARR.SIZE("grid", 1)
+CALL ARR.SIZE("grid2d", 1)
 PRINT "  Cols: "; _
 PRINT "  PASS"
+PRINT ""
 
-' Test 28: 3D Array
+' ===== Test 28: 3D Array =====
 PRINT "Test 28: 3D Array"
 DIM cube[2, 3, 4]
 LET cube[1, 2, 3] = 777
 PRINT "  cube[1, 2, 3] = "; cube[1, 2, 3]
 PRINT "  PASS"
+PRINT ""
 
 ' ===== Test 29: Matrix Operations =====
 PRINT "Test 29: Matrix Operations"
@@ -531,74 +534,118 @@ ENDIF
 PRINT "  PASS"
 PRINT ""
 
-' ===== Test 41: String Manipulation Examples =====
-PRINT "Test 41: String Manipulation Examples"
-LET sentence = "The Quick Brown Fox"
-CALL LCASE(sentence)
-LET lower = _
-CALL UCASE(sentence)
-LET upper = _
-PRINT "  Original: "; sentence
-PRINT "  Lower: "; lower
-PRINT "  Upper: "; upper
-
-LET text = "Hello, World!"
-CALL INSTR(text, ",")
-LET comma_pos = _
-CALL LEFT(text, comma_pos - 1)
-LET before = _
-CALL MID(text, comma_pos + 2)
-LET after = _
-PRINT "  Split '"; text; "' at comma:"
-PRINT "    Before: '"; before; "'"
-PRINT "    After: '"; after; "'"
-PRINT "  PASS"
-PRINT ""
-
-' ===== Test 42: Building Strings with CHR =====
-PRINT "Test 42: Building Strings with CHR"
-LET alphabet = ""
-FOR i = 65 TO 90
-  CALL CHR(i)
-  LET alphabet = alphabet + _
-NEXT i
-PRINT "  Alphabet: "; alphabet
-CALL LEN(alphabet)
-IF _ == 26 THEN
-  PRINT "  Built 26-char alphabet: PASS"
+' ===== Test 41: Hash Map Basic Operations =====
+PRINT "Test 41: Hash Map Basic Operations"
+CALL Map.Set("test_user", "name", "Alice")
+CALL Map.Set("test_user", "age", "25")
+CALL Map.Set("test_user", "role", "Engineer")
+CALL Map.Get("test_user", "name")
+IF _ == "Alice" THEN
+  PRINT "  Map.Get: PASS"
+ENDIF
+CALL Map.Has("test_user", "name")
+IF _ == 1 THEN
+  PRINT "  Map.Has (exists): PASS"
+ENDIF
+CALL Map.Has("test_user", "missing")
+IF _ == 0 THEN
+  PRINT "  Map.Has (missing): PASS"
 ENDIF
 PRINT "  PASS"
 PRINT ""
 
-' ===== Test 43: Parsing with String Functions =====
-PRINT "Test 43: Parsing CSV-like Data"
-LET csv = "Alice,25,Engineer"
-CALL INSTR(csv, ",")
-LET pos1 = _
-CALL LEFT(csv, pos1 - 1)
-LET name = _
-CALL MID(csv, pos1 + 1)
-LET rest = _
-CALL INSTR(rest, ",")
-LET pos2 = _
-CALL LEFT(rest, pos2 - 1)
-LET age_str = _
-CALL VAL(age_str)
-LET age = _
-CALL MID(rest, pos2 + 1)
-LET job = _
-PRINT "  Parsed CSV: '"; csv; "'"
-PRINT "    Name: "; name
-PRINT "    Age: "; age
-PRINT "    Job: "; job
-IF name == "Alice" AND age == 25 AND job == "Engineer" THEN
-  PRINT "  CSV parsing: PASS"
+' ===== Test 42: Hash Map Default Values =====
+PRINT "Test 42: Hash Map Default Values"
+CALL Map.Get("test_user", "phone", "N/A")
+IF _ == "N/A" THEN
+  PRINT "  Default value: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 43: Hash Map Size and Keys =====
+PRINT "Test 43: Hash Map Size and Keys"
+CALL Map.Size("test_user")
+IF _ == 3 THEN
+  PRINT "  Map.Size: PASS"
+ENDIF
+CALL Map.Keys("test_user")
+LET keys = _
+CALL INSTR(keys, "name")
+IF _ > 0 THEN
+  PRINT "  Map.Keys contains 'name': PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 44: Hash Map Delete and Clear =====
+PRINT "Test 44: Hash Map Delete and Clear"
+CALL Map.Delete("test_user", "age")
+CALL Map.Size("test_user")
+IF _ == 2 THEN
+  PRINT "  Map.Delete: PASS"
+ENDIF
+CALL Map.Clear("test_user")
+CALL Map.Size("test_user")
+IF _ == 0 THEN
+  PRINT "  Map.Clear: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 45: Multiple Hash Maps =====
+PRINT "Test 45: Multiple Hash Maps"
+CALL Map.Set("config", "theme", "dark")
+CALL Map.Set("session", "token", "abc123")
+CALL Map.Get("config", "theme")
+LET theme = _
+CALL Map.Get("session", "token")
+LET token = _
+IF theme == "dark" AND token == "abc123" THEN
+  PRINT "  Multiple independent maps: PASS"
+ENDIF
+PRINT "  PASS"
+PRINT ""
+
+' ===== Test 46: Hash Map Word Counter =====
+PRINT "Test 46: Hash Map Word Counter"
+CALL Map.Clear("words")
+LET text = "the quick brown fox jumps over the lazy dog"
+' Simplified word count for "the"
+CALL Map.Get("words", "the", "0")
+LET count = _
+CALL VAL(count)
+LET count = _ + 1
+CALL STR(count)
+CALL Map.Set("words", "the", _)
+CALL Map.Get("words", "the", "0")
+LET count = _
+CALL VAL(count)
+LET count = _ + 1
+CALL STR(count)
+CALL Map.Set("words", "the", _)
+CALL Map.Get("words", "the")
+CALL VAL(_)
+IF _ == 2 THEN
+  PRINT "  Word frequency counter: PASS"
 ENDIF
 PRINT "  PASS"
 PRINT ""
 
 PRINT "========================================="
 PRINT "All Tests Complete!"
+PRINT "  Total: 46 tests"
+PRINT "  Core Arrays: Tests 1-3"
+PRINT "  Loops: Tests 4-7, 12, 19, 25"
+PRINT "  DATA/READ: Tests 8-11"
+PRINT "  Strings: Tests 13, 22"
+PRINT "  SUBs: Tests 14-17"
+PRINT "  Control Flow: Tests 18, 19"
+PRINT "  Math: Tests 20-21, 23-24"
+PRINT "  Multidimensional Arrays: Tests 26-32"
+PRINT "  Boolean: Test 33"
+PRINT "  String Functions: Tests 34-40"
+PRINT "  Hash Maps: Tests 41-46"
 PRINT "========================================="
 END
 

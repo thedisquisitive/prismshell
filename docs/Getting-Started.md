@@ -19,7 +19,7 @@ The special variable `_` holds the result of the last `CALL`.
 Classic BASIC with line numbers for program storage:
 
 ```basic
-10 PRINT "PrismBASIC v0.1 — type HELP"
+10 PRINT "PrismBASIC v0.1 – type HELP"
 20 INPUT name
 30 PRINT "Hello, "; name; "!"
 40 CALL Env.Cwd()
@@ -32,11 +32,11 @@ LOAD hello.bas
 ```
 
 ### Editor Commands
-- `LIST` — display the current program
-- `RUN` — execute the line-numbered program
-- `SAVE <file>` — persist program to disk
-- `LOAD <file>` — restore program from disk
-- `NEW` — clear the program
+- `LIST` – display the current program
+- `RUN` – execute the line-numbered program
+- `SAVE <file>` – persist program to disk
+- `LOAD <file>` – restore program from disk
+- `NEW` – clear the program
 - Typing a bare line number (e.g., `30`) deletes that line
 
 ## Arrays
@@ -122,6 +122,79 @@ Key points:
 - Use comma-separated indices: `arr[i, j, k]`
 - Query dimensions with ARR.DIMS() and ARR.SIZE()
 - Compatible with FOR loops and DATA/READ
+
+## Hash Maps (Associative Arrays)
+
+Store and retrieve data using string keys:
+
+```basic
+' Create user profile
+CALL Map.Set("user", "name", "Alice")
+CALL Map.Set("user", "age", "30")
+CALL Map.Set("user", "role", "Engineer")
+
+' Retrieve values
+CALL Map.Get("user", "name")
+PRINT "Name: "; _
+
+' Check if key exists
+CALL Map.Has("user", "email")
+IF _ == 0 THEN
+  PRINT "No email on file"
+ENDIF
+
+' Get with default value
+CALL Map.Get("user", "phone", "N/A")
+PRINT "Phone: "; _
+
+' Get all keys
+CALL Map.Keys("user")
+PRINT "Profile fields:"
+PRINT _
+
+' Get map size
+CALL Map.Size("user")
+PRINT "Total fields: "; _
+
+' Delete a key
+CALL Map.Delete("user", "age")
+
+' Clear entire map
+CALL Map.Clear("user")
+```
+
+Common use cases:
+
+```basic
+' Configuration management
+CALL Map.Set("config", "theme", "dark")
+CALL Map.Set("config", "language", "en")
+
+' Word frequency counter
+CALL Map.Get("freq", "the", "0")
+LET count = _
+LET count = count + 1
+CALL Map.Set("freq", "the", count)
+
+' Feature flags
+CALL Map.Set("features", "beta_mode", "1")
+CALL Map.Has("features", "beta_mode")
+IF _ == 1 THEN
+  PRINT "Beta features enabled"
+ENDIF
+
+' Multiple independent maps
+CALL Map.Set("session", "token", "abc123")
+CALL Map.Set("cache", "last_result", "42")
+CALL Map.Set("prefs", "font_size", "14")
+```
+
+Key points:
+- Keys must be strings
+- Values can be strings or numbers
+- Multiple independent maps supported
+- Case-sensitive keys
+- Default values prevent missing-key errors
 
 ## Block Control Flow
 
@@ -235,6 +308,59 @@ Key points:
 - Supports numbers and strings
 - Reading past end causes "Out of DATA" error
 
+## String Manipulation
+
+Comprehensive string processing functions:
+
+```basic
+' Substring extraction
+CALL LEFT("Hello World", 5)
+PRINT _  ' "Hello"
+
+CALL RIGHT("Hello World", 5)
+PRINT _  ' "World"
+
+CALL MID("Hello World", 7, 5)
+PRINT _  ' "World"
+
+' Search for substring
+CALL INSTR("Hello World", "World")
+PRINT "Position: "; _  ' 7
+
+' Case conversion
+CALL UCASE("hello")
+PRINT _  ' "HELLO"
+
+CALL LCASE("WORLD")
+PRINT _  ' "world"
+
+' Whitespace removal
+CALL TRIM("  Hello  ")
+PRINT _  ' "Hello"
+
+' Character/ASCII conversion
+CALL CHR(65)
+PRINT _  ' "A"
+
+CALL ASC("Hello")
+PRINT _  ' 72 (ASCII of 'H')
+
+' Number/string conversion
+CALL STR(123.45)
+LET s = _
+PRINT s  ' "123.45"
+
+CALL VAL("42")
+PRINT _  ' 42
+
+' Parsing example
+LET csv = "Alice,30,Engineer"
+CALL INSTR(csv, ",")
+LET pos = _
+CALL LEFT(csv, pos - 1)
+PRINT "Name: "; _  ' "Alice"
+```
+
 ## User-Defined Subroutines
 
 Define reusable procedures with parameters and return values:
@@ -270,6 +396,35 @@ Key points:
 - Use `LET _ = value` to set the return value
 - SUBs can call other SUBs and be recursive
 - Parameters are passed by value
+
+## Boolean Operators
+
+Combine conditions with AND, OR, NOT:
+
+```basic
+LET x = 5
+LET y = 10
+
+' AND operator
+IF x > 0 AND y > 0 THEN
+  PRINT "Both positive"
+ENDIF
+
+' OR operator
+IF x < 0 OR y > 0 THEN
+  PRINT "At least one condition true"
+ENDIF
+
+' NOT operator
+IF NOT (x == y) THEN
+  PRINT "Values are different"
+ENDIF
+
+' Combining operators
+IF (x > 0 AND x < 10) OR y > 5 THEN
+  PRINT "Complex condition"
+ENDIF
+```
 
 ## Shebang Scripts
 
@@ -358,50 +513,40 @@ Here's a more substantial example combining multiple features:
 
 ```basic
 #!/usr/bin/env prismshell
-' Matrix calculator
+' Contact manager with hash maps
 
-10 PRINT "Matrix Operations Demo"
-20 PRINT "====================="
+10 PRINT "Contact Manager"
+20 PRINT "==============="
 30 PRINT ""
 
-' Initialize matrices
-40 DIM a[3, 3]
-50 DIM b[3, 3]
-60 DIM result[3, 3]
+' Add contacts
+40 CALL Map.Set("contacts.alice", "email", "alice@example.com")
+50 CALL Map.Set("contacts.alice", "phone", "555-1234")
+60 CALL Map.Set("contacts.alice", "role", "Developer")
 
-' Fill with sample data
-70 DATA 1, 2, 3, 4, 5, 6, 7, 8, 9
-80 DATA 9, 8, 7, 6, 5, 4, 3, 2, 1
+70 CALL Map.Set("contacts.bob", "email", "bob@example.com")
+80 CALL Map.Set("contacts.bob", "phone", "555-5678")
+90 CALL Map.Set("contacts.bob", "role", "Designer")
 
-90 FOR i = 0 TO 2
-100   FOR j = 0 TO 2
-110     READ a[i, j]
-120   NEXT j
-130 NEXT i
+' Display contact info
+100 PRINT "Contact: Alice"
+110 CALL Map.Get("contacts.alice", "email")
+120 PRINT "  Email: "; _
+130 CALL Map.Get("contacts.alice", "phone")
+140 PRINT "  Phone: "; _
+150 CALL Map.Get("contacts.alice", "role")
+160 PRINT "  Role: "; _
+170 PRINT ""
 
-140 FOR i = 0 TO 2
-150   FOR j = 0 TO 2
-160     READ b[i, j]
-170   NEXT j
-180 NEXT i
+180 PRINT "Contact: Bob"
+190 CALL Map.Get("contacts.bob", "email")
+200 PRINT "  Email: "; _
+210 CALL Map.Get("contacts.bob", "phone")
+220 PRINT "  Phone: "; _
+230 CALL Map.Get("contacts.bob", "role")
+240 PRINT "  Role: "; _
 
-' Add matrices
-190 FOR i = 0 TO 2
-200   FOR j = 0 TO 2
-210     LET result[i, j] = a[i, j] + b[i, j]
-220   NEXT j
-230 NEXT i
-
-' Display result
-240 PRINT "Matrix A + Matrix B:"
-250 FOR i = 0 TO 2
-260   FOR j = 0 TO 2
-270     PRINT result[i, j]; " ";
-280   NEXT j
-290   PRINT ""
-300 NEXT i
-
-310 END
+250 END
 ```
 
 ## Next Steps
