@@ -18,7 +18,7 @@ using ExprPtr = std::shared_ptr<Expr>;
 struct Expr {
   enum Kind { 
     Num, Str, Var, Bin, CallFn,
-    ArrIndex   // NEW: array[index] access
+    ArrIndex   // array[index] access
   } kind;
   int line{0};
 
@@ -29,16 +29,22 @@ struct Expr {
   std::string name;          // for Var or CallFn
   std::vector<ExprPtr> args; // for CallFn
 
-  // NEW: for ArrIndex
+  // for ArrIndex
   std::string arrName;
   ExprPtr index;
 
   // binary arithmetic
-  char op{0};                // + - * / ^  ← ADDED ^ for exponentiation
+  char op{0};                // + - * / ^
 
   // comparisons
   std::string cmp;           // "==","!=", "<","<=",">",">="
   ExprPtr left, right;
+};
+
+// NEW: Support for READ with array indexing
+struct ReadTarget {
+  std::string varName;
+  ExprPtr arrayIndex;  // nullptr for simple variables, expr for array[index]
 };
 
 struct Stmt {
@@ -50,13 +56,14 @@ struct Stmt {
     ElseIfThen,  // "ELSEIF <expr> THEN"
     ElseBlk,     // "ELSE"
     EndIf,       // "ENDIF"
-    // Phase 1:
     Dim,         // DIM name[size] or DIM name[]
     ArrAssign,   // name[index] = expr
     SubDef,      // SUB definition (parsed separately)
-    // NEW Phase 2: FOR/NEXT
     For,         // FOR var = start TO end [STEP step]
-    Next         // NEXT [var]
+    Next,        // NEXT [var]
+    Data,        // DATA value1, value2, ...
+    Read,        // READ var1, var2, ... (now supports arrays)
+    Restore      // RESTORE
   } kind{};
   int line{0};
 
@@ -91,11 +98,17 @@ struct Stmt {
   std::string subName;
   std::vector<std::string> subParams;
 
-  // NEW Phase 2: FOR loop
+  // FOR loop
   std::string forVar;
   ExprPtr forStart;
   ExprPtr forEnd;
-  ExprPtr forStep;  // nullptr means default 1
+  ExprPtr forStep;  // nullptr means step 1
+
+  // DATA
+  std::vector<ExprPtr> dataValues;
+
+  // READ - updated to support arrays
+  std::vector<ReadTarget> readTargets;
 };
 
 struct ParseOut {
@@ -124,7 +137,7 @@ private:
 };
 
 // Is the first token of a line an Id equal to kw (case-insensitive)?
-static inline bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
+static bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
   Lexer lx(src, line);
   auto ts = lx.lex();
   if(ts.empty()) return false;

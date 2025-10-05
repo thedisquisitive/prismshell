@@ -265,6 +265,66 @@ StmtPtr Parser::parseStmt() {
     s->forVar = var;  // may be empty
     return s;
   }
+
+  // --- DATA/READ/RESTORE (Phase 2) ---
+  if (t.k == TokKind::Data) {
+    auto t_data = pop();
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::Data;
+    s->line = t_data.line;
+    
+    // Parse comma-separated values (numbers and strings)
+    while (!eof() && peek().k != TokKind::End) {
+      auto e = parseExpr();
+      if (!e) break;
+      s->dataValues.push_back(e);
+      if (!match(TokKind::Comma)) break;
+    }
+    return s;
+  }
+
+ // READ var1, var2, var3, ... (now supports array indexing)
+  if (t.k == TokKind::Read) {
+    auto t_read = pop();
+    std::vector<ReadTarget> targets;
+    
+    // Parse comma-separated list of variables or array elements
+    while (!eof() && peek().k != TokKind::End) {
+      if (peek().k != TokKind::Id) break;
+      
+      ReadTarget target;
+      target.varName = pop().text;
+      target.arrayIndex = nullptr;
+      
+      // Check for array indexing: var[expr]
+      if (peek().k == TokKind::LBracket) {
+        pop();  // consume '['
+        target.arrayIndex = parseExpr();
+        if (!match(TokKind::RBracket)) {
+          return nullptr;  // Missing closing bracket
+        }
+      }
+      
+      targets.push_back(target);
+      
+      if (!match(TokKind::Comma)) break;
+    }
+    
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::Read;
+    s->line = t_read.line;
+    s->readTargets = targets;
+    return s;
+  }
+
+  // RESTORE
+  if (t.k == TokKind::Restore) {
+    auto t_restore = pop();
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::Restore;
+    s->line = t_restore.line;
+    return s;
+  }
   
   // LET or array assignment detection
   if (t.k == TokKind::Let) {

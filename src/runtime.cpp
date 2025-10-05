@@ -58,6 +58,9 @@ namespace pb {
         case TokKind::Next:      return "NEXT";
         case TokKind::To:        return "TO";
         case TokKind::Step:      return "STEP";
+        case TokKind::Data:      return "DATA";
+        case TokKind::Read:      return "READ";
+        case TokKind::Restore:   return "RESTORE";
         default:
           // For identifiers (like WHILE, WEND, ENDIF, ELSEIF), use text
           if(ts[0].k == TokKind::Id) {
@@ -358,6 +361,39 @@ int mod_run_capture(const std::string& name, const std::vector<std::string>& arg
 int mod_run(const std::string& name, const std::vector<std::string>& args, Runtime& parent) {
   std::string ignored;
   return mod_run_capture(name, args, parent, &ignored);
+}
+
+void Runtime::buildDataPool() {
+  dataPool.clear();
+  dataPointer = 0;
+ 
+  // Iterate through program in line number order
+  for (const auto& [lineNum, src] : program) {
+    
+    // Parse this line to check if it's a DATA statement
+    Lexer lx(src, lineNum);
+    Parser p(lx.lex());
+    auto po = p.parse();
+    
+    if (po.err) {
+      continue;
+    }
+    
+    if (!po.stmts.empty()) {
+      for (const auto& stmt : po.stmts) {
+        
+        if (stmt->kind == Stmt::Data) {
+         
+          // Evaluate each expression in the DATA statement and add to pool
+          for (const auto& expr : stmt->dataValues) {
+            Value v = eval(expr);
+            dataPool.push_back(v);
+           }
+        }
+      }
+    }
+  }
+  
 }
 
 /* ---------------- Runtime: expression eval ---------------- */
@@ -738,6 +774,56 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
       }
     } break;
 
+    case Stmt::Data: {
+      // No-op
+    } break;
+
+    case Stmt::Read: {
+      for (const auto& target : s->readTargets) {
+        if (dataPointer >= dataPool.size()) {
+          r.err = Error{s->line, "Out of DATA"};
+          break;
+        }
+        
+        Value data = dataPool[dataPointer++];
+        
+        if (target.arrayIndex) {
+          // Reading into array element
+          auto it = arrays.find(target.varName);
+          if (it == arrays.end()) {
+            // Auto-create array if it doesn't exist
+            arrays[target.varName] = std::vector<Value>();
+            it = arrays.find(target.varName);
+          }
+          
+          // Evaluate the index expression
+          Value idxVal = eval(target.arrayIndex);
+          int idx = 0;
+          if (std::holds_alternative<Number>(idxVal)) {
+            idx = (int)std::get<Number>(idxVal);
+          } else {
+            std::string str = to_string(idxVal);
+            try { idx = std::stoi(str); } catch(...) { idx = 0; }
+          }
+          
+          // Auto-expand array if needed
+          if (idx >= (int)it->second.size()) {
+            it->second.resize(idx + 1);
+          }
+          
+          if (idx >= 0) {
+            it->second[idx] = data;
+          }
+        } else {
+          // Reading into simple variable
+          vars[target.varName] = data;
+        }
+      }
+    } break;
+
+    case Stmt::Restore: {
+      dataPointer = 0;  // Reset to beginning of DATA pool
+    } break;
 
     case Stmt::End: {
       *pc = std::numeric_limits<int>::max();
@@ -773,7 +859,7 @@ Result Runtime::run_program(){
 Result Runtime::run_program(int startLine){
   Result r;
   RtSigintScope _rt_sig_scope;  // enable Ctrl-C -> interrupt during program run
-
+  buildDataPool();
   if(program.empty()) return r;
 
   std::vector<int> lines; lines.reserve(program.size());
@@ -796,8 +882,11 @@ Result Runtime::run_program(int startLine){
     std::string src = program[lineNo];
 
     Lexer lx(src, lineNo);
-    Parser p(lx.lex());
-    auto out = p.parse();
+    auto tokens = lx.lex();
+
+    Parser p(tokens);
+    auto out = p.parse();  
+    
     if(out.err){ r.err = out.err; break; }
 
     int pc = lineNo;

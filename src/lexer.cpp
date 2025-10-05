@@ -76,7 +76,8 @@ std::vector<Token> Lexer::lex(){
       else if(up=="THEN")  push(TokKind::Then);
       else if(up=="ELSE")  push(TokKind::Else);
       else if(up=="END")   push(TokKind::EndTok);
-      else if(up=="REM") {
+      else if(up=="REM") 
+      {
         // comment keyword: eat rest of line; only emit Rem if at start-of-line
         if (start_of_line()) push(TokKind::Rem);
         while(pos<(int)src.size() && src[pos] != '\n' && src[pos] != '\r') ++pos;
@@ -88,9 +89,12 @@ std::vector<Token> Lexer::lex(){
       else if(up=="DIM")    push(TokKind::Dim);
       else if(up=="SUB")    push(TokKind::Sub);
       else if(up=="FOR")    push(TokKind::For);
-      else if(up=="TO")    push(TokKind::To);
-      else if(up=="STEP")    push(TokKind::Step);
-      else if(up=="NEXT")    push(TokKind::Next);
+      else if(up=="TO")     push(TokKind::To);
+      else if(up=="STEP")   push(TokKind::Step);
+      else if(up=="NEXT")   push(TokKind::Next);
+      else if(up=="DATA")   push(TokKind::Data);
+      else if(up=="READ")   push(TokKind::Read);
+      else if(up=="RESTORE") push(TokKind::Restore);
       else                  push(TokKind::Id, id);
       continue;
     }
@@ -106,7 +110,13 @@ std::vector<Token> Lexer::lex(){
       case ')': push(TokKind::RParen); break;
       case ',': push(TokKind::Comma); break;
       case ';': push(TokKind::Semi); break;
-      case '=': push(TokKind::Eq); break;
+      case '=': 
+        // Check if next char is also '=' for ==
+        if(pos<(int)src.size() && src[pos]=='='){ 
+          ++pos; // consume the second =
+        }
+        push(TokKind::Eq); // Always push Eq, whether = or ==
+        break;
       case '^': push(TokKind::Caret); break;
       case '<':
         if(pos<(int)src.size() && src[pos]=='='){ ++pos; push(TokKind::Le); }

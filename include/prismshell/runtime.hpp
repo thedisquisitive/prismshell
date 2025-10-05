@@ -37,6 +37,10 @@ struct Runtime {
   // NEW Phase 2: FOR loop stack (for nested loops)
   std::vector<ForLoopState> forStack;
 
+  // NEW Phase 2: DATA/READ/RESTORE support
+  std::vector<Value> dataPool;    // all DATA values in program order
+  size_t dataPointer{0};          // current READ position
+
   // Execution
   Result run_line_direct(const std::string& line, int lineNo=0);
   Result run_program();                 // run from beginning
@@ -53,6 +57,7 @@ struct Runtime {
   // Internals used by the interpreter/runtime
   Value  eval(const ExprPtr& e);
   Result exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack);
+  void buildDataPool();
 
   // RNG state (per-runtime)
   std::mt19937_64 rng{};
