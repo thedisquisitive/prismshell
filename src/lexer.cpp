@@ -87,6 +87,10 @@ std::vector<Token> Lexer::lex(){
       else if(up=="CALL")   push(TokKind::Call);
       else if(up=="DIM")    push(TokKind::Dim);
       else if(up=="SUB")    push(TokKind::Sub);
+      else if(up=="FOR")    push(TokKind::For);
+      else if(up=="TO")    push(TokKind::To);
+      else if(up=="STEP")    push(TokKind::Step);
+      else if(up=="NEXT")    push(TokKind::Next);
       else                  push(TokKind::Id, id);
       continue;
     }

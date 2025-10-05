@@ -54,6 +54,10 @@ namespace pb {
         case TokKind::Dim:       return "DIM";
         case TokKind::Sub:       return "SUB";
         case TokKind::Rem:       return "REM";
+        case TokKind::For:       return "FOR";
+        case TokKind::Next:      return "NEXT";
+        case TokKind::To:        return "TO";
+        case TokKind::Step:      return "STEP";
         default:
           // For identifiers (like WHILE, WEND, ENDIF, ELSEIF), use text
           if(ts[0].k == TokKind::Id) {
@@ -93,6 +97,43 @@ namespace {
 
 static Value num(double d)              { return Value{d}; }
 static Value str(std::string s)         { return Value{std::move(s)}; }
+
+// Helper: Find the line after the matching NEXT for a given FOR
+static int find_matching_next(const std::map<int,std::string>& program, 
+                               int forLine, 
+                               const std::string& /*varName*/) {
+  int depth = 0;
+  for (auto it = program.upper_bound(forLine); it != program.end(); ++it) {
+    int ln = it->first;
+    std::string kw = first_kw(it->second, ln);
+    
+    if (kw == "FOR") {
+      ++depth;
+    } else if (kw == "NEXT") {
+      if (depth == 0) {
+        // Found matching NEXT - return line after it
+        auto it2 = program.upper_bound(ln);
+        return (it2 == program.end()) ? std::numeric_limits<int>::max() : it2->first;
+      }
+      --depth;
+    }
+  }
+  // No matching NEXT found
+  return std::numeric_limits<int>::max();
+}
+
+// Helper: Convert Value to double
+static double asDouble(const Value& v) {
+  if (std::holds_alternative<Number>(v)) {
+    return std::get<Number>(v);
+  }
+  std::string s = to_string(v);
+  try {
+    return std::stod(s);
+  } catch (...) {
+    return 0.0;
+  }
+}
 
 /* ---------------- User SUB execution ---------------- */
 
@@ -638,6 +679,63 @@ Result Runtime::exec(const StmtPtr& s, int* pc, std::vector<int>& gosubStack){
         }
       }
       *pc = target;
+    } break;
+
+    case Stmt::For: {
+      // Evaluate start, end, step expressions
+      double start = asDouble(eval(s->forStart));
+      double end = asDouble(eval(s->forEnd));
+      double step = s->forStep ? asDouble(eval(s->forStep)) : 1.0;
+      
+      // Initialize loop variable
+      vars[s->forVar] = num(start);
+      
+      // Determine if we should enter the loop based on step direction
+      bool enter = (step > 0) ? (start <= end) : (start >= end);
+      
+      if (enter) {
+        // Push loop state onto stack for NEXT to use
+        ForLoopState state;
+        state.var = s->forVar;
+        state.end = end;
+        state.step = step;
+        state.loopStartLine = next_line_after(program, s->line);
+        forStack.push_back(state);
+      } else {
+        // Condition false from start - skip to after matching NEXT
+        *pc = find_matching_next(program, s->line, s->forVar);
+      }
+    } break;
+
+    case Stmt::Next: {
+      if (forStack.empty()) {
+        r.err = Error{s->line, "NEXT without FOR"};
+        break;
+      }
+      
+      ForLoopState& state = forStack.back();
+      
+      // Verify variable name if provided (optional check)
+      if (!s->forVar.empty() && s->forVar != state.var) {
+        r.err = Error{s->line, "NEXT variable mismatch: expected " + state.var + ", got " + s->forVar};
+        break;
+      }
+      
+      // Increment loop variable
+      double current = asDouble(vars[state.var]);
+      current += state.step;
+      vars[state.var] = num(current);
+      
+      // Check if we should continue looping
+      bool cont = (state.step > 0) ? (current <= state.end) : (current >= state.end);
+      
+      if (cont) {
+        // Continue loop - jump back to first line after FOR
+        *pc = state.loopStartLine;
+      } else {
+        // Exit loop - pop state and continue
+        forStack.pop_back();
+      }
     } break;
 
 

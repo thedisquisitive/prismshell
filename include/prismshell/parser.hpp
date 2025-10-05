@@ -34,7 +34,7 @@ struct Expr {
   ExprPtr index;
 
   // binary arithmetic
-  char op{0};                // + - * /
+  char op{0};                // + - * / ^  ← ADDED ^ for exponentiation
 
   // comparisons
   std::string cmp;           // "==","!=", "<","<=",">",">="
@@ -46,14 +46,17 @@ struct Stmt {
     Rem, Let, Print, Input,
     If, Goto, Gosub, Return, Call, End,
     While, Wend,
-    IfThenBlk,   // "IF <expr> THEN" (EOL) — block header
+    IfThenBlk,   // "IF <expr> THEN" (EOL) – block header
     ElseIfThen,  // "ELSEIF <expr> THEN"
     ElseBlk,     // "ELSE"
     EndIf,       // "ENDIF"
-    // NEW Phase 1:
+    // Phase 1:
     Dim,         // DIM name[size] or DIM name[]
     ArrAssign,   // name[index] = expr
-    SubDef       // SUB definition (parsed separately)
+    SubDef,      // SUB definition (parsed separately)
+    // NEW Phase 2: FOR/NEXT
+    For,         // FOR var = start TO end [STEP step]
+    Next         // NEXT [var]
   } kind{};
   int line{0};
 
@@ -75,23 +78,29 @@ struct Stmt {
   // GOTO/GOSUB targets
   int targetLine{-1};
 
-  // NEW: DIM
+  // DIM
   std::string dimName;
   ExprPtr dimSize;  // nullptr means dynamic []
 
-  // NEW: ArrAssign
+  // ArrAssign
   std::string arrName;
   ExprPtr arrIndex;
   ExprPtr arrValue;
 
-  // NEW: SubDef
+  // SubDef
   std::string subName;
   std::vector<std::string> subParams;
+
+  // NEW Phase 2: FOR loop
+  std::string forVar;
+  ExprPtr forStart;
+  ExprPtr forEnd;
+  ExprPtr forStep;  // nullptr means default 1
 };
 
 struct ParseOut {
   std::vector<StmtPtr> stmts;
-  std::optional<Error> err;  // FIXED: Was "e", now "Error"
+  std::optional<Error> err;
 };
 
 struct Parser {
@@ -115,7 +124,7 @@ private:
 };
 
 // Is the first token of a line an Id equal to kw (case-insensitive)?
-static bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
+static inline bool first_token_is_id_kw(const std::string& src, int line, const char* kw){
   Lexer lx(src, line);
   auto ts = lx.lex();
   if(ts.empty()) return false;

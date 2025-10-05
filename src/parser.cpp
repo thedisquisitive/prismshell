@@ -210,6 +210,62 @@ StmtPtr Parser::parseStmt() {
     }
   }
 
+  // --- FOR/NEXT (Phase 2) ---
+  if (t.k == TokKind::For) {
+    auto t_for = pop();
+    
+    // Expect: variable name
+    if (peek().k != TokKind::Id) return nullptr;
+    std::string var = pop().text;
+    
+    // Expect: =
+    if (!match(TokKind::Eq)) return nullptr;
+    
+    // Parse start expression
+    auto start = parseExpr();
+    if (!start) return nullptr;
+    
+    // Expect: TO
+    if (!match(TokKind::To)) return nullptr;
+    
+    // Parse end expression
+    auto end = parseExpr();
+    if (!end) return nullptr;
+    
+    // Optional: STEP
+    ExprPtr step = nullptr;
+    if (match(TokKind::Step)) {
+      step = parseExpr();
+      if (!step) return nullptr;
+    }
+    
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::For;
+    s->line = t_for.line;
+    s->forVar = var;
+    s->forStart = start;
+    s->forEnd = end;
+    s->forStep = step;  // nullptr means default 1
+    return s;
+  }
+
+  // NEXT [var]
+  if (t.k == TokKind::Next) {
+    auto t_next = pop();
+    
+    // Optional: variable name
+    std::string var;
+    if (peek().k == TokKind::Id) {
+      var = pop().text;
+    }
+    
+    auto s = std::make_shared<Stmt>();
+    s->kind = Stmt::Next;
+    s->line = t_next.line;
+    s->forVar = var;  // may be empty
+    return s;
+  }
+  
   // LET or array assignment detection
   if (t.k == TokKind::Let) {
     pop();

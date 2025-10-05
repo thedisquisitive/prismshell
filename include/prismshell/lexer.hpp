@@ -15,6 +15,7 @@ Let, Print, Input, If, Then, Else, EndTok, Rem,
 Goto, Gosub, ReturnTok,
 Call,
 Dim, Sub, LBracket, RBracket,
+For, To, Step, Next
 };
 
 
