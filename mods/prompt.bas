@@ -1,14 +1,42 @@
 10  CALL Mod.Register("prompt", 100)
 20  END
 
-100 REM Build a prompt string. Called as: prompt --status <code>
+100 REM Build a colored prompt with truncated path
 110 LET CODE = PB_ARG2
-120 CALL Env.Cwd()
-130 LET C = _
-140 IF CODE = "0" THEN 200
-150 LET EMOJI = "❌"
-160 GOTO 210
-200 LET EMOJI = "✅"
-210 LET PROMPT = EMOJI + " " + C + " pbsh> "
-220 LET _ = PROMPT
-230 END
+
+120 REM Get current directory
+130 CALL Env.Cwd()
+140 LET FULLPATH = _
+
+150 REM Replace HOME with ~
+160 CALL Env.Get("HOME")
+170 LET HOME = _
+180 CALL LEN(HOME)
+190 LET HOMELEN = _
+200 CALL LEFT(FULLPATH, HOMELEN)
+210 IF _ != HOME THEN 250
+220 CALL MID(FULLPATH, HOMELEN + 1)
+230 LET SHORTPATH = "~" + _
+240 GOTO 260
+250 LET SHORTPATH = FULLPATH
+
+260 REM Handle empty path (at home directory)
+270 IF SHORTPATH == "~" THEN 260
+280 IF SHORTPATH == "" THEN 300
+290 GOTO 310
+300 LET SHORTPATH = "~"
+
+310 REM Choose color based on status
+320 IF CODE = "0" THEN 350
+330 LET EMOJI = "❌"
+340 GOTO 360
+350 LET EMOJI = "✅"
+
+360 REM Build colored prompt
+370 CALL Color.Cyan()
+380 LET CYAN = _
+390 CALL Color.Reset()
+400 LET RESET = _
+410 LET PROMPT = EMOJI + " " + CYAN + SHORTPATH + RESET + " pbsh> "
+420 LET _ = PROMPT
+430 END

@@ -1715,6 +1715,132 @@ std::string up = qname;
     return Value{};
   }
 
+
+  // ------- Color.* (ANSI terminal colors) -------
+  if(up=="COLOR" && (wantN(1) || wantN(2))) {
+    std::string color = asS(0);
+    std::string cUp = color;
+    for(char& c: cUp) c = (char)std::toupper((unsigned char)c);
+    
+    bool bg = wantN(2) ? (truthy(args[1])) : false;
+    
+    // Special formatting codes
+    if(cUp == "RESET")     return str("\033[0m");
+    if(cUp == "BOLD")      return str("\033[1m");
+    if(cUp == "DIM")       return str("\033[2m");
+    if(cUp == "ITALIC")    return str("\033[3m");
+    if(cUp == "UNDERLINE") return str("\033[4m");
+    if(cUp == "BLINK")     return str("\033[5m");
+    if(cUp == "REVERSE")   return str("\033[7m");
+    if(cUp == "HIDDEN")    return str("\033[8m");
+    
+    // Standard colors
+    int code = 0;
+    if(cUp == "BLACK")        code = bg ? 40 : 30;
+    else if(cUp == "RED")     code = bg ? 41 : 31;
+    else if(cUp == "GREEN")   code = bg ? 42 : 32;
+    else if(cUp == "YELLOW")  code = bg ? 43 : 33;
+    else if(cUp == "BLUE")    code = bg ? 44 : 34;
+    else if(cUp == "MAGENTA") code = bg ? 45 : 35;
+    else if(cUp == "CYAN")    code = bg ? 46 : 36;
+    else if(cUp == "WHITE")   code = bg ? 47 : 37;
+    else return str(""); // Unknown color
+    
+    std::ostringstream oss;
+    oss << "\033[" << code << "m";
+    return str(oss.str());
+  }
+
+  // Bright/bold colors (codes 90-97 for foreground, 100-107 for background)
+  if(up=="COLOR.BRIGHT" && (wantN(1) || wantN(2))) {
+    std::string color = asS(0);
+    std::string cUp = color;
+    for(char& c: cUp) c = (char)std::toupper((unsigned char)c);
+    
+    bool bg = wantN(2) ? (truthy(args[1])) : false;
+    
+    int code = 0;
+    if(cUp == "BLACK")        code = bg ? 100 : 90;
+    else if(cUp == "RED")     code = bg ? 101 : 91;
+    else if(cUp == "GREEN")   code = bg ? 102 : 92;
+    else if(cUp == "YELLOW")  code = bg ? 103 : 93;
+    else if(cUp == "BLUE")    code = bg ? 104 : 94;
+    else if(cUp == "MAGENTA") code = bg ? 105 : 95;
+    else if(cUp == "CYAN")    code = bg ? 106 : 96;
+    else if(cUp == "WHITE")   code = bg ? 107 : 97;
+    else return str(""); // Unknown color
+    
+    std::ostringstream oss;
+    oss << "\033[" << code << "m";
+    return str(oss.str());
+  }
+
+  // True color RGB support (24-bit color)
+  // CALL Color.RGB(r, g, b [, bg])
+  if(up=="COLOR.RGB" && (wantN(3) || wantN(4))) {
+    int r = (int)asD(0);
+    int g = (int)asD(1);
+    int b = (int)asD(2);
+    bool bg = wantN(4) ? (truthy(args[3])) : false;
+    
+    // Clamp to 0-255
+    r = r < 0 ? 0 : (r > 255 ? 255 : r);
+    g = g < 0 ? 0 : (g > 255 ? 255 : g);
+    b = b < 0 ? 0 : (b > 255 ? 255 : b);
+    
+    std::ostringstream oss;
+    if(bg) {
+      oss << "\033[48;2;" << r << ";" << g << ";" << b << "m";
+    } else {
+      oss << "\033[38;2;" << r << ";" << g << ";" << b << "m";
+    }
+    return str(oss.str());
+  }
+
+  // 256-color palette support
+  // CALL Color.Palette(n [, bg])
+  if(up=="COLOR.PALETTE" && (wantN(1) || wantN(2))) {
+    int n = (int)asD(0);
+    bool bg = wantN(2) ? (truthy(args[1])) : false;
+    
+    // Clamp to 0-255
+    n = n < 0 ? 0 : (n > 255 ? 255 : n);
+    
+    std::ostringstream oss;
+    if(bg) {
+      oss << "\033[48;5;" << n << "m";
+    } else {
+      oss << "\033[38;5;" << n << "m";
+    }
+    return str(oss.str());
+  }
+
+  // Convenience functions for common colors
+  if(up=="COLOR.RED" && wantN(0))     return str("\033[31m");
+  if(up=="COLOR.GREEN" && wantN(0))   return str("\033[32m");
+  if(up=="COLOR.YELLOW" && wantN(0))  return str("\033[33m");
+  if(up=="COLOR.BLUE" && wantN(0))    return str("\033[34m");
+  if(up=="COLOR.MAGENTA" && wantN(0)) return str("\033[35m");
+  if(up=="COLOR.CYAN" && wantN(0))    return str("\033[36m");
+  if(up=="COLOR.WHITE" && wantN(0))   return str("\033[37m");
+  if(up=="COLOR.RESET" && wantN(0))   return str("\033[0m");
+  if(up=="COLOR.BOLD" && wantN(0))    return str("\033[1m");
+  if(up=="COLOR.DIM" && wantN(0))     return str("\033[2m");
+  if(up=="COLOR.UNDERLINE" && wantN(0)) return str("\033[4m");
+
+  // Check if terminal supports colors
+  if(up=="COLOR.SUPPORTED" && wantN(0)) {
+    const char* term = std::getenv("TERM");
+    if(!term) return num(0.0);
+    std::string t = term;
+    // Simple heuristic: most modern terminals
+    bool supported = (t.find("xterm") != std::string::npos ||
+                    t.find("color") != std::string::npos ||
+                    t.find("256") != std::string::npos ||
+                    t == "screen" ||
+                    t == "linux");
+    return num(supported ? 1.0 : 0.0);
+  }
   // Unknown -> empty
   return Value{};
 }  // ← This closes call_dispatch function

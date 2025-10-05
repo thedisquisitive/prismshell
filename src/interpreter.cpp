@@ -347,21 +347,74 @@ static std::string expand_template(std::string tmpl, int last_status){
   rep("time", now_time_hhmmss());
   return tmpl;
 }
-static std::string build_prompt(Runtime& rt, int last_status, const std::unordered_set<std::string>& disabled){
+
+static std::string readline_escape(const std::string& ansi) {
+  return "\001" + ansi + "\002";
+}
+
+// Helper to wrap ANSI codes in a string
+static std::string wrap_ansi_for_readline(const std::string& str) {
+  std::string result;
+  bool in_escape = false;
+  std::string escape_seq;
+  
+  for(size_t i = 0; i < str.size(); ++i) {
+    char c = str[i];
+    
+    if(!in_escape && c == '\033') {
+      // Start of ANSI sequence
+      in_escape = true;
+      escape_seq = "\001\033";  // Start with \001
+      continue;
+    }
+    
+    if(in_escape) {
+      escape_seq += c;
+      // ANSI sequences end with a letter (simplified detection)
+      if(std::isalpha((unsigned char)c)) {
+        escape_seq += "\002";  // End with \002
+        result += escape_seq;
+        in_escape = false;
+        escape_seq.clear();
+      }
+      continue;
+    }
+    
+    result += c;
+  }
+  
+  return result;
+}
+
+static std::string build_prompt(Runtime& rt, int last_status, 
+                                 const std::unordered_set<std::string>& disabled){
   // 1) prompt mod
   if(!disabled.count("prompt") && mod_has("prompt")){
     std::string out;
     int rc = mod_run_capture("prompt", {"--status", std::to_string(last_status)}, rt, &out);
-    if(rc==0 && !out.empty()) return out;
+    if(rc==0 && !out.empty()) {
+      // Wrap any ANSI codes in the mod output
+      return wrap_ansi_for_readline(out);
+    }
   }
+  
   // 2) template
   auto it = rt.vars.find("PB_PROMPT_TMPL");
   if(it!=rt.vars.end()){
-    return expand_template(to_string(it->second), last_status);
+    std::string expanded = expand_template(to_string(it->second), last_status);
+    return wrap_ansi_for_readline(expanded);
   }
-  // 3) default
-  return expand_template("${status_emoji} ${shortcwd} pbsh> ", last_status);
+  
+  // 3) default with colors
+  std::string green = readline_escape("\033[32m");
+  std::string red = readline_escape("\033[31m");
+  std::string reset = readline_escape("\033[0m");
+  std::string cyan = readline_escape("\033[36m");
+  
+  std::string emoji = (last_status == 0) ? green + "✅" + reset : red + "❌" + reset;
+  return emoji + " " + cyan + expand_template("${shortcwd}", last_status) + reset + " pbsh> ";
 }
+
 
 // ---- builtins: cd & pwd (affect parent process) ----
 static int builtin_cd(const std::vector<std::string>& argv){
@@ -446,6 +499,11 @@ void Interpreter::repl(const char* /*prompt_ignored*/){
   int last_status = 0;
   std::cout << "PrismBASIC Shell — MVP (type HELP)\n";
 
+  std::string historyFile;
+  if (const char* home = std::getenv("HOME")) {
+    historyFile = std::string(home) + "/.prismshell_history";
+    read_history(historyFile.c_str());
+  }
 
 // Discover & register all mods, then autostart per ~/.prismrc
 PrismRC rc = loadPrismRC();
@@ -574,6 +632,11 @@ for (const auto& m : toRun) {
     last_status = rt.sh_exec(s);
     std::signal(SIGINT, prev);
     (void)take_interrupt(); // drain pending SIGINT so next prompt isn't interrupted
+  }
+  if (!historyFile.empty()) {
+    write_history(historyFile.c_str());
+    // Optional: limit history size
+    history_truncate_file(historyFile.c_str(), 1000);
   }
 }
 
