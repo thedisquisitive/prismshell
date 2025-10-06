@@ -1,0 +1,27 @@
+Package: prismshell
+Version: 0.1.0
+Section: shells
+Priority: optional
+Architecture: amd64
+Depends: libc6 (>= 2.27), libstdc++6 (>= 8), libreadline8 (>= 7.0)
+Maintainer: Zach Hogarth <zach@thedisquisitive.com>
+Homepage: https://github.com/thedisquisitive/prismshell
+Description: PrismBASIC interactive shell and interpreter
+ A retro-style BASIC shell featuring a line-numbered editor, direct execution
+ mode, arrays, user-defined subroutines, and block control flow. Includes
+ comprehensive filesystem operations, mod system for extensibility, and
+ seamless shell passthrough for Unix command integration.
+ .
+ Phase 1 & 2 Complete - Full-featured classic BASIC interpreter:
+  - Arrays: fixed (DIM arr[10]) and dynamic (DIM arr[])
+  - User SUBs with parameters, recursion, and return values
+  - Block IF/ELSEIF/ELSE/ENDIF
+  - WHILE/WEND loops
+  - FOR/NEXT loops with optional STEP (positive or negative)
+  - DATA/READ/RESTORE for embedded data
+  - READ into arrays and variables
+  - 50+ builtin functions (filesystem, paths, env, RNG, time)
+  - Mod system for writing shell extensions in BASIC
+  - Customizable prompts
+  - Shebang script support
+Installed-Size: 488

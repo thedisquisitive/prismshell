@@ -180,7 +180,7 @@ namespace {
       else if(key=="autoload_all") rc.autoload_all = (val=="1"||val=="true"||val=="yes"||val=="on");
       else if(key=="autostart")    rc.autostart = pb_rc_splitWordsOrCSV(val);
     }
-    if(!rc.autoload_all && rc.autostart.empty()) rc.autostart = {"prompt.bas"};
+    //if(!rc.autoload_all && rc.autostart.empty()) rc.autostart = {"prompt.bas"};
     return rc;
   }
 } // namespace
@@ -612,30 +612,48 @@ for (const auto& m : toRun) {
       last_status = 0; continue;
     }
 
-    // Try BASIC direct
-    if(auto r = rt.run_line_direct(s, 0); !r.err){ last_status = 0; continue; }
+    // Check if it starts with a BASIC keyword
+    std::string firstWord;
+    {
+      auto argv = tokenize_quoted(s);
+      if(!argv.empty()) firstWord = to_upper(argv[0]);
+    }
 
-    // Try mod dispatch first (quoted args aware)
+    static const std::unordered_set<std::string> basic_keywords = {
+      "PRINT", "LET", "INPUT", "IF", "GOTO", "GOSUB", "RETURN", 
+      "CALL", "DIM", "FOR", "NEXT", "WHILE", "WEND", "DATA", 
+      "READ", "RESTORE", "END", "REM", "SUB"
+    };
+
+    // If it's a BASIC keyword, try BASIC first
+    if(basic_keywords.count(firstWord)){
+      if(auto r = rt.run_line_direct(s, 0); !r.err){ 
+        last_status = 0; 
+        continue; 
+      }
+    }
+
+    // Try mod dispatch
     {
       auto argv = tokenize_quoted(s);
       if(!argv.empty()){
-        std::string cmd = argv[0]; std::vector<std::string> a; for(size_t i=1;i<argv.size();++i) a.push_back(argv[i]);
-        if(!cmd.empty() && !g_disabled_mods.count(cmd) && mod_has(cmd)){
+        std::string cmd = argv[0];
+        if(!g_disabled_mods.count(cmd) && mod_has(cmd)){
+          std::vector<std::string> a(argv.begin()+1, argv.end());
           last_status = mod_run(cmd, a, rt);
           continue;
         }
       }
     }
 
-    // Fallback: /bin/sh -lc  (parent ignores SIGINT so Ctrl-C kills only child)
+    // Default: treat as shell command
     auto prev = std::signal(SIGINT, SIG_IGN);
     last_status = rt.sh_exec(s);
     std::signal(SIGINT, prev);
-    (void)take_interrupt(); // drain pending SIGINT so next prompt isn't interrupted
+    (void)take_interrupt();
   }
   if (!historyFile.empty()) {
     write_history(historyFile.c_str());
-    // Optional: limit history size
     history_truncate_file(historyFile.c_str(), 1000);
   }
 }

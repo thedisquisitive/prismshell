@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+# Cleanup user mods directory if empty
+if [ -d "$HOME/.config/prismshell/mods" ]; then
+    rmdir "$HOME/.config/prismshell/mods" 2>/dev/null || true
+    rmdir "$HOME/.config/prismshell" 2>/dev/null || true
+fi
+
+exit 0

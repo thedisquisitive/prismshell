@@ -534,12 +534,37 @@ Value Runtime::eval(const ExprPtr& e){
         double ln = std::holds_alternative<Number>(L) ? std::get<Number>(L) : std::atof(ls.c_str());
         double rn = std::holds_alternative<Number>(R) ? std::get<Number>(R) : std::atof(rs.c_str());
         bool ok = false;
-        if(e->cmp=="==") ok = (ls==rs) || (ln==rn);
-        else if(e->cmp=="!=") ok = !((ls==rs) || (ln==rn));
-        else if(e->cmp=="<")  ok = ln <  rn;
-        else if(e->cmp=="<=") ok = ln <= rn;
-        else if(e->cmp==">")  ok = ln >  rn;
-        else if(e->cmp==">=") ok = ln >= rn;
+        if(e->cmp=="==") {
+          // If both are strings, do string comparison only
+          if(std::holds_alternative<std::string>(L) && std::holds_alternative<std::string>(R)) {
+            ok = (ls == rs);
+          } else {
+            // Otherwise do numeric comparison
+            ok = (ln == rn);
+          }
+        }
+        else if(e->cmp=="!=") {
+          // If both are strings, do string comparison only
+          if(std::holds_alternative<std::string>(L) && std::holds_alternative<std::string>(R)) {
+            ok = (ls != rs);
+          } else {
+            // Otherwise do numeric comparison
+            ok = (ln != rn);
+          }
+        }
+        else if(e->cmp=="<") {
+          // Relational operators are always numeric
+          ok = ln < rn;
+        }
+        else if(e->cmp=="<=") {
+          ok = ln <= rn;
+        }
+        else if(e->cmp==">") {
+          ok = ln > rn;
+        }
+        else if(e->cmp==">=") {
+          ok = ln >= rn;
+        }
         return num(ok ? 1.0 : 0.0);
       }
 
